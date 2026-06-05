@@ -929,7 +929,7 @@ sensor:
 
             if (is_chg_sync) {
 
-                if (filt_v >= 4.23f) {
+                if (filt_v >= 4.24f) {
                     return id(color_screamin_green); 
                 }
                 return id(color_whitesmoke); 
