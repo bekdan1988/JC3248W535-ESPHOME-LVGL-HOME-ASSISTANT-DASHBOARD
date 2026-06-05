@@ -928,8 +928,8 @@ sensor:
             bool is_chg_sync = id(battery_charging_sensor).state;
 
             if (is_chg_sync) {
-                
-                if (filt_v >= 4.18f) {
+
+                if (filt_v >= 4.23f) {
                     return id(color_screamin_green); 
                 }
                 return id(color_whitesmoke); 
