@@ -1019,6 +1019,7 @@ sensor:
       static bool ha_charging = false;
       static int ha_on_c = 0; static int ha_off_c = 0;
       static bool boot_check_ha = false;
+      static float last_valid_soc = -1.0f;
 
       if (!boot_check_ha && millis() > 10000) {
           if (raw > 4.12f) { ha_charging = true; ha_on_c = 15; }
@@ -1033,7 +1034,7 @@ sensor:
       if (ha_on_c >= 12) ha_charging = true;
       if (ha_off_c >= 3) ha_charging = false;
       
-      float v_calc = ha_charging ? (raw - 0.40f) : filt;
+      float v_calc = ha_charging ? (raw - 0.43f) : filt;
       
       float soc_ha = 0.0f;
       if (v_calc <= 3.00f) soc_ha = 0.0f;
@@ -1052,8 +1053,16 @@ sensor:
 
       if (ha_charging && soc_ha > 96.0f && raw < 4.25f) soc_ha = 96.0f;
 
-      if (soc_ha > 100.0f) return 100.0f;
-      if (soc_ha < 0.0f) return 0.0f;
+      if (soc_ha > 100.0f) soc_ha = 100.0f;
+      if (soc_ha < 0.0f) soc_ha = 0.0f;
+
+      if (ha_charging && last_valid_soc >= 0.0f) {
+          if (soc_ha > last_valid_soc + 1.0f) {
+              soc_ha = last_valid_soc + 1.0f;
+          }
+      }
+      last_valid_soc = soc_ha;
+
       return soc_ha;
 
   - platform: homeassistant
