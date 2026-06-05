@@ -916,7 +916,7 @@ sensor:
     accuracy_decimals: 2
     internal: true
     filters:
-      - multiply: 1.72
+      - multiply: 1.72         
     on_value:
       - lvgl.label.update:
           id: batt_label
@@ -924,22 +924,8 @@ sensor:
           text_color: !lambda |-
             float raw_v = id(raw_battery_v).state;
             float filt_v = id(filtered_battery_v).state;
-            static bool is_chg_sync = false;
-            static int on_c = 0; static int off_c = 0;
-            static bool boot_check_color = false;
-
-            if (!boot_check_color && millis() > 10000) {
-                if (raw_v > 4.12f) { is_chg_sync = true; on_c = 15; }
-                boot_check_color = true;
-            }
-
-            if (raw_v > (filt_v + 0.08f) || raw_v > 4.15f) { on_c++; off_c = 0; }
-            else if (raw_v < (filt_v - 0.02f) || (raw_v < 4.07f && raw_v < filt_v + 0.01f)) { 
-                off_c++; on_c = 0; 
-            } else { on_c = 0; }
-
-            if (on_c >= 12) is_chg_sync = true;  
-            if (off_c >= 3) is_chg_sync = false;
+            
+            bool is_chg_sync = id(battery_charging_sensor).state;
 
             if (is_chg_sync) {
                 if (raw_v > 4.20f) return id(color_screamin_green); 
@@ -947,7 +933,6 @@ sensor:
             }
 
             float ha_soc_color = id(battery_soc_sensor).state;
-            
             if (!std::isnan(ha_soc_color) && std::lround(ha_soc_color) <= 20) {
                 return id(color_red);
             }
@@ -955,29 +940,12 @@ sensor:
           
           text: !lambda |-
             if (millis() < 10000) return ""; 
-            float raw_v = id(raw_battery_v).state;
-            float filt_v = id(filtered_battery_v).state;
-            static bool is_chg = false;
-            static int on_t = 0; static int off_t = 0;
-            static bool boot_check_text = false;
 
-            if (!boot_check_text && millis() > 10000) {
-                if (raw_v > 4.12f) { is_chg = true; on_t = 15; }
-                boot_check_text = true;
-            }
-
-            if (raw_v > (filt_v + 0.08f) || raw_v > 4.15f) { on_t++; off_t = 0; }
-            else if (raw_v < (filt_v - 0.02f) || (raw_v < 4.07f && raw_v < filt_v + 0.01f)) { 
-                off_t++; on_t = 0; 
-            } else { on_t = 0; }
-
-            if (on_t >= 12) is_chg = true;  
-            if (off_t >= 3) is_chg = false;
+            bool is_chg = id(battery_charging_sensor).state;
 
             if (is_chg) return "${icon_power_plug_battery}";
             
             float ha_soc = id(battery_soc_sensor).state;
-            
             if (std::isnan(ha_soc)) return "${icon_battery_unknown}";
             
             int current_soc = (int)std::lround(ha_soc);
@@ -1014,24 +982,9 @@ sensor:
     update_interval: 30s
     lambda: |-
       if (millis() < 10000) return {}; 
-      float raw = id(raw_battery_v).state;
       float filt = id(filtered_battery_v).state;
-      static bool ha_charging = false;
-      static int ha_on_c = 0; static int ha_off_c = 0;
-      static bool boot_check_ha = false;
-
-      if (!boot_check_ha && millis() > 10000) {
-          if (raw > 4.12f) { ha_charging = true; ha_on_c = 15; }
-          boot_check_ha = true;
-      }
-
-      if (raw > (filt + 0.08f) || raw > 4.15f) { ha_on_c++; ha_off_c = 0; }
-      else if (raw < (filt - 0.02f) || (raw < 4.07f && raw < filt + 0.01f)) { 
-          ha_off_c++; ha_on_c = 0; // JAVÍTVA: Duplikált sor kitakarítva
-      } else { ha_off_c = 0; }
       
-      if (ha_on_c >= 12) ha_charging = true;
-      if (ha_off_c >= 3) ha_charging = false;
+      bool ha_charging = id(battery_charging_sensor).state;
       
       if (ha_charging) {
           return 100.0f; 
@@ -1493,6 +1446,7 @@ sensor:
 binary_sensor:
   - platform: template
     name: "${battery_charging}"
+    id: battery_charging_sensor
     device_class: "battery_charging"
     lambda: |-
       if (millis() < 10000) return {}; 
