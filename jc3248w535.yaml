@@ -945,7 +945,12 @@ sensor:
                 if (raw_v > 4.20f) return id(color_screamin_green); 
                 return id(color_whitesmoke); 
             }
-            if (filt_v <= 3.48f) return id(color_red);
+
+            float ha_soc_color = id(battery_soc_sensor).state;
+            
+            if (!std::isnan(ha_soc_color) && std::lround(ha_soc_color) <= 20) {
+                return id(color_red);
+            }
             return id(color_whitesmoke);
           
           text: !lambda |-
