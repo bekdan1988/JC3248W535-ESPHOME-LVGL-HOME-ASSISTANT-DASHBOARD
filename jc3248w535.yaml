@@ -928,11 +928,8 @@ sensor:
             bool is_chg_sync = id(battery_charging_sensor).state;
 
             if (is_chg_sync) {
-
-                float ha_soc_check = id(battery_soc_sensor).state;
-                int current_soc_check = !std::isnan(ha_soc_check) ? (int)std::lround(ha_soc_check) : 0;
-
-                if (raw_v >= 4.25f && current_soc_check >= 100) {
+                
+                if (filt_v >= 4.18f) {
                     return id(color_screamin_green); 
                 }
                 return id(color_whitesmoke); 
