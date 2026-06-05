@@ -105,6 +105,7 @@ substitutions:
   uptime_days_unit_of_measurement: "óra"                              # EN: "hours"
   prevent_sleep_ha: "Mélyalvás megakadályozása"                       # EN: "Prevent deep sleep"
   battery: "Akkumulátor"                                              # EN: "Battery"
+  battery_charging: "Akkumulátor töltés"                              # EN: "Battery charging"
   
     # MAIN MENU
   page_name_home: "KEZDŐLAP"                                          # EN: "HOME"
@@ -906,7 +907,7 @@ sensor:
               if (x > -50) return "${icon_wifi_strong}"; // Strong
               if (x > -70) return "${icon_wifi_medium}"; // Medium
               return "${icon_wifi_weak}";                // Weak
-  
+
   - platform: adc
     pin: 5
     id: raw_battery_v
@@ -915,7 +916,7 @@ sensor:
     accuracy_decimals: 2
     internal: true
     filters:
-      - multiply: 1.88
+      - multiply: 1.72
     on_value:
       - lvgl.label.update:
           id: batt_label
@@ -928,23 +929,23 @@ sensor:
             static bool boot_check_color = false;
 
             if (!boot_check_color && millis() > 10000) {
-                if (raw_v > 4.25f) { is_chg_sync = true; on_c = 10; }
+                if (raw_v > 4.12f) { is_chg_sync = true; on_c = 15; }
                 boot_check_color = true;
             }
 
-            if (raw_v > (filt_v + 0.05f) || raw_v > 4.30f) { on_c++; off_c = 0; }
-            else if (raw_v < (filt_v - 0.02f) || (raw_v < 4.22f && raw_v < filt_v + 0.01f)) { 
+            if (raw_v > (filt_v + 0.08f) || raw_v > 4.15f) { on_c++; off_c = 0; }
+            else if (raw_v < (filt_v - 0.02f) || (raw_v < 4.07f && raw_v < filt_v + 0.01f)) { 
                 off_c++; on_c = 0; 
             } else { on_c = 0; }
 
-            if (on_c >= 6) is_chg_sync = true;  
+            if (on_c >= 12) is_chg_sync = true;  
             if (off_c >= 3) is_chg_sync = false;
 
             if (is_chg_sync) {
-                if (raw_v > 4.40f) return id(color_screamin_green);
+                if (raw_v > 4.20f) return id(color_screamin_green); 
                 return id(color_whitesmoke); 
             }
-            if (filt_v <= 3.61f) return id(color_red);
+            if (filt_v <= 3.48f) return id(color_red);
             return id(color_whitesmoke);
           
           text: !lambda |-
@@ -954,41 +955,38 @@ sensor:
             static bool is_chg = false;
             static int on_t = 0; static int off_t = 0;
             static bool boot_check_text = false;
-            static int last_displayed_soc = -1;
 
             if (!boot_check_text && millis() > 10000) {
-                if (raw_v > 4.25f) { is_chg = true; on_t = 10; }
+                if (raw_v > 4.12f) { is_chg = true; on_t = 15; }
                 boot_check_text = true;
             }
 
-            if (raw_v > (filt_v + 0.05f) || raw_v > 4.30f) { on_t++; off_t = 0; }
-            else if (raw_v < (filt_v - 0.02f) || (raw_v < 4.22f && raw_v < filt_v + 0.01f)) { 
+            if (raw_v > (filt_v + 0.08f) || raw_v > 4.15f) { on_t++; off_t = 0; }
+            else if (raw_v < (filt_v - 0.02f) || (raw_v < 4.07f && raw_v < filt_v + 0.01f)) { 
                 off_t++; on_t = 0; 
             } else { on_t = 0; }
 
-            if (on_t >= 6) is_chg = true;  
+            if (on_t >= 12) is_chg = true;  
             if (off_t >= 3) is_chg = false;
 
-            float d_v = is_chg ? (raw_v - 0.40f) : ((millis() < 60000) ? raw_v : filt_v);
-            int current_soc = (int)((d_v - 3.40f) / 0.70f * 100.0f);
-            if (current_soc > 100) current_soc = 100;
-            if (current_soc < 0) current_soc = 0;
-
-            if (last_displayed_soc == -1 || std::abs(current_soc - last_displayed_soc) >= 3 || is_chg) {
-                last_displayed_soc = current_soc;
-            } else { current_soc = last_displayed_soc; }
-
             if (is_chg) return "${icon_power_plug_battery}";
-            if (current_soc >= 96) return "${icon_battery_full}"; 
-            if (current_soc > 85)  return "${icon_battery_90}";
-            if (current_soc > 75)  return "${icon_battery_80}";
-            if (current_soc > 65)  return "${icon_battery_70}";
-            if (current_soc > 55)  return "${icon_battery_60}";
-            if (current_soc > 45)  return "${icon_battery_50}";
-            if (current_soc > 35)  return "${icon_battery_40}";
-            if (current_soc > 25)  return "${icon_battery_30}";
-            if (current_soc > 15)  return "${icon_battery_20}";
-            if (current_soc > 5)   return "${icon_battery_10}";
+            
+            float ha_soc = id(battery_soc_sensor).state;
+            
+            if (std::isnan(ha_soc)) return "${icon_battery_unknown}";
+            
+            int current_soc = (int)std::lround(ha_soc);
+            
+            if (current_soc >= 100) return "${icon_battery_full}";
+            if (current_soc >= 90)  return "${icon_battery_90}";
+            if (current_soc >= 80)  return "${icon_battery_80}";
+            if (current_soc >= 70)  return "${icon_battery_70}";
+            if (current_soc >= 60)  return "${icon_battery_60}";
+            if (current_soc >= 50)  return "${icon_battery_50}";
+            if (current_soc >= 40)  return "${icon_battery_40}";
+            if (current_soc >= 30)  return "${icon_battery_30}";
+            if (current_soc >= 20)  return "${icon_battery_20}";
+            if (current_soc >= 10)  return "${icon_battery_10}";
             return "${icon_battery_outline}";
 
   - platform: template
@@ -1004,6 +1002,7 @@ sensor:
 
   - platform: template
     name: "${battery}"
+    id: battery_soc_sensor
     device_class: "battery"
     unit_of_measurement: "%"
     accuracy_decimals: 0
@@ -1017,25 +1016,40 @@ sensor:
       static bool boot_check_ha = false;
 
       if (!boot_check_ha && millis() > 10000) {
-          if (raw > 4.25f) { ha_charging = true; ha_on_c = 10; }
+          if (raw > 4.12f) { ha_charging = true; ha_on_c = 15; }
           boot_check_ha = true;
       }
 
-      if (raw > (filt + 0.05f) || raw > 4.30f) { ha_on_c++; ha_off_c = 0; }
-      else if (raw < (filt - 0.02f) || (raw < 4.22f && raw < filt + 0.01f)) { 
+      if (raw > (filt + 0.08f) || raw > 4.15f) { ha_on_c++; ha_off_c = 0; }
+      else if (raw < (filt - 0.02f) || (raw < 4.07f && raw < filt + 0.01f)) { 
           ha_off_c++; ha_on_c = 0; 
-      } else { ha_on_c = 0; }
+      } else { ha_off_c = 0; }
       
-      if (ha_on_c >= 6) ha_charging = true;
+      if (ha_on_c >= 12) ha_charging = true;
       if (ha_off_c >= 3) ha_charging = false;
       
-      float v_to_calc = ha_charging ? (raw - 0.40f) : ((millis() < 60000) ? raw : filt);
-      float soc = (v_to_calc - 3.40f) / 0.70f * 100.0f;
-      if (ha_charging && soc > 96.0f && raw < 4.40f) soc = 96.0f;
+      if (ha_charging) {
+          return 100.0f; 
+      }
       
-      if (soc > 100.0f) return 100.0f;
-      if (soc < 0.0f) return 0.0f;
-      return soc;
+      float soc_ha = 0.0f;
+      if (filt <= 3.00f) soc_ha = 0.0f;
+      else if (filt <= 3.36f) soc_ha = 0.0f  + (filt - 3.00f) * (5.0f - 0.0f) / (3.36f - 3.00f);
+      else if (filt <= 3.41f) soc_ha = 5.0f  + (filt - 3.36f) * (10.0f - 5.0f) / (3.41f - 3.41f);
+      else if (filt <= 3.48f) soc_ha = 10.0f + (filt - 3.41f) * (20.0f - 10.0f) / (3.48f - 3.41f);
+      else if (filt <= 3.52f) soc_ha = 20.0f + (filt - 3.48f) * (30.0f - 20.0f) / (3.52f - 3.48f);
+      else if (filt <= 3.56f) soc_ha = 30.0f + (filt - 3.52f) * (40.0f - 30.0f) / (3.56f - 3.52f);
+      else if (filt <= 3.61f) soc_ha = 40.0f + (filt - 3.56f) * (50.0f - 40.0f) / (3.61f - 3.56f);
+      else if (filt <= 3.70f) soc_ha = 50.0f + (filt - 3.61f) * (60.0f - 50.0f) / (3.70f - 3.61f);
+      else if (filt <= 3.79f) soc_ha = 60.0f + (filt - 3.70f) * (70.0f - 60.0f) / (3.79f - 3.70f);
+      else if (filt <= 3.89f) soc_ha = 70.0f + (filt - 3.79f) * (80.0f - 70.0f) / (3.89f - 3.79f);
+      else if (filt <= 3.98f) soc_ha = 80.0f + (filt - 3.89f) * (90.0f - 80.0f) / (3.98f - 3.89f);
+      else if (filt <= 4.02f) soc_ha = 90.0f + (filt - 3.98f) * (100.0f - 90.0f) / (4.02f - 3.98f);
+      else soc_ha = 100.0f;
+
+      if (soc_ha > 100.0f) return 100.0f;
+      if (soc_ha < 0.0f) return 0.0f;
+      return soc_ha;
 
   - platform: homeassistant
     id: thermostat_current_temp
@@ -1472,6 +1486,25 @@ sensor:
             return {buf};
 
 binary_sensor:
+  - platform: template
+    name: "${battery_charging}"
+    device_class: "battery_charging"
+    lambda: |-
+      if (millis() < 10000) return {}; 
+      float raw = id(raw_battery_v).state;
+      float filt = id(filtered_battery_v).state;
+      static bool ha_charging_state = false;
+      static int ha_on_b = 0; static int ha_off_b = 0;
+
+      if (raw > (filt + 0.08f) || raw > 4.15f) { ha_on_b++; ha_off_b = 0; }
+      else if (raw < (filt - 0.02f) || (raw < 4.07f && raw < filt + 0.01f)) { ha_off_b++; ha_on_b = 0; }
+      else { ha_off_b = 0; }
+      
+      if (ha_on_b >= 12) ha_charging_state = true;
+      if (ha_off_b >= 3) ha_charging_state = false;
+      
+      return ha_charging_state;
+
   - platform: template
     id: sensor_lights
     lambda: |-
