@@ -1033,24 +1033,24 @@ sensor:
       if (ha_on_c >= 12) ha_charging = true;
       if (ha_off_c >= 3) ha_charging = false;
       
-      if (ha_charging) {
-          return 100.0f; 
-      }
+      float v_calc = ha_charging ? (raw - 0.40f) : filt;
       
       float soc_ha = 0.0f;
-      if (filt <= 3.00f) soc_ha = 0.0f;
-      else if (filt <= 3.36f) soc_ha = 0.0f  + (filt - 3.00f) * (5.0f - 0.0f) / (3.36f - 3.00f);
-      else if (filt <= 3.41f) soc_ha = 5.0f  + (filt - 3.36f) * (10.0f - 5.0f) / (3.41f - 3.41f);
-      else if (filt <= 3.48f) soc_ha = 10.0f + (filt - 3.41f) * (20.0f - 10.0f) / (3.48f - 3.41f);
-      else if (filt <= 3.52f) soc_ha = 20.0f + (filt - 3.48f) * (30.0f - 20.0f) / (3.52f - 3.48f);
-      else if (filt <= 3.56f) soc_ha = 30.0f + (filt - 3.52f) * (40.0f - 30.0f) / (3.56f - 3.52f);
-      else if (filt <= 3.61f) soc_ha = 40.0f + (filt - 3.56f) * (50.0f - 40.0f) / (3.61f - 3.56f);
-      else if (filt <= 3.70f) soc_ha = 50.0f + (filt - 3.61f) * (60.0f - 50.0f) / (3.70f - 3.61f);
-      else if (filt <= 3.79f) soc_ha = 60.0f + (filt - 3.70f) * (70.0f - 60.0f) / (3.79f - 3.70f);
-      else if (filt <= 3.89f) soc_ha = 70.0f + (filt - 3.79f) * (80.0f - 70.0f) / (3.89f - 3.79f);
-      else if (filt <= 3.98f) soc_ha = 80.0f + (filt - 3.89f) * (90.0f - 80.0f) / (3.98f - 3.89f);
-      else if (filt <= 4.02f) soc_ha = 90.0f + (filt - 3.98f) * (100.0f - 90.0f) / (4.02f - 3.98f);
+      if (v_calc <= 3.00f) soc_ha = 0.0f;
+      else if (v_calc <= 3.36f) soc_ha = 0.0f  + (v_calc - 3.00f) * (5.0f - 0.0f) / (3.36f - 3.00f);
+      else if (v_calc <= 3.41f) soc_ha = 5.0f  + (v_calc - 3.36f) * (10.0f - 5.0f) / (3.41f - 3.41f);
+      else if (v_calc <= 3.48f) soc_ha = 10.0f + (v_calc - 3.41f) * (20.0f - 10.0f) / (3.48f - 3.41f);
+      else if (v_calc <= 3.52f) soc_ha = 20.0f + (v_calc - 3.48f) * (30.0f - 20.0f) / (3.52f - 3.48f);
+      else if (v_calc <= 3.56f) soc_ha = 30.0f + (v_calc - 3.52f) * (40.0f - 30.0f) / (3.56f - 3.52f);
+      else if (v_calc <= 3.61f) soc_ha = 40.0f + (v_calc - 3.56f) * (50.0f - 40.0f) / (3.61f - 3.56f);
+      else if (v_calc <= 3.70f) soc_ha = 50.0f + (v_calc - 3.61f) * (60.0f - 50.0f) / (3.70f - 3.61f);
+      else if (v_calc <= 3.79f) soc_ha = 60.0f + (v_calc - 3.70f) * (70.0f - 60.0f) / (3.79f - 3.70f);
+      else if (v_calc <= 3.89f) soc_ha = 70.0f + (v_calc - 3.79f) * (80.0f - 70.0f) / (3.89f - 3.79f);
+      else if (v_calc <= 3.98f) soc_ha = 80.0f + (v_calc - 3.89f) * (90.0f - 80.0f) / (3.98f - 3.89f);
+      else if (v_calc <= 4.02f) soc_ha = 90.0f + (v_calc - 3.98f) * (100.0f - 90.0f) / (4.02f - 3.98f);
       else soc_ha = 100.0f;
+
+      if (ha_charging && soc_ha > 96.0f && raw < 4.25f) soc_ha = 96.0f;
 
       if (soc_ha > 100.0f) return 100.0f;
       if (soc_ha < 0.0f) return 0.0f;
