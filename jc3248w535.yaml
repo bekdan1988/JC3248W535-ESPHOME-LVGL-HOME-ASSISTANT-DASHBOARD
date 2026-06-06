@@ -106,6 +106,7 @@ substitutions:
   prevent_sleep_ha: "Mélyalvás megakadályozása"                       # EN: "Prevent deep sleep"
   battery: "Akkumulátor"                                              # EN: "Battery"
   battery_charging: "Akkumulátor töltés"                              # EN: "Battery charging"
+  battery_fully_charged: "Akkumulátor teljesen feltöltve"             # EN: "Battery Fully Charged"
   
     # MAIN MENU
   page_name_home: "KEZDŐLAP"                                          # EN: "HOME"
@@ -920,50 +921,60 @@ sensor:
     on_value:
       - lvgl.label.update:
           id: batt_label
-          text_font: f_tray_icons
+          text_font: f_tray_icons  
+          
           text_color: !lambda |-
-            float raw_v = id(raw_battery_v).state;
+            bool is_charging = id(battery_charging_sensor).state;
             float filt_v = id(filtered_battery_v).state;
             
-            bool is_chg_sync = id(battery_charging_sensor).state;
+            if (is_charging) {
 
-            if (is_chg_sync) {
-
-                if (filt_v >= 4.24f) {
-                    return id(color_screamin_green); 
-                }
-                return id(color_whitesmoke); 
+                if (filt_v >= 4.20f) return id(color_screamin_green);
+                return id(color_whitesmoke);
             }
-
-            float ha_soc_color = id(battery_soc_sensor).state;
-            if (!std::isnan(ha_soc_color) && std::lround(ha_soc_color) <= 20) {
+            
+            float current_soc = id(battery_soc_sensor).state;
+            if (!std::isnan(current_soc) && current_soc <= 20.0f) {
                 return id(color_red);
             }
             return id(color_whitesmoke);
-          
+
           text: !lambda |-
-            if (millis() < 10000) return ""; 
-
-            bool is_chg = id(battery_charging_sensor).state;
-
-            if (is_chg) return "${icon_power_plug_battery}";
+            static char buf[10]; 
             
-            float ha_soc = id(battery_soc_sensor).state;
-            if (std::isnan(ha_soc)) return "${icon_battery_unknown}";
+            if (millis() < 10000) {
+                snprintf(buf, sizeof(buf), "%s", "${icon_battery_unknown}");
+                return buf;
+            }
             
-            int current_soc = (int)std::lround(ha_soc);
+            if (id(battery_charging_sensor).state) {
+                snprintf(buf, sizeof(buf), "%s", "${icon_power_plug_battery}");
+                return buf;
+            }
             
-            if (current_soc >= 100) return "${icon_battery_full}";
-            if (current_soc >= 90)  return "${icon_battery_90}";
-            if (current_soc >= 80)  return "${icon_battery_80}";
-            if (current_soc >= 70)  return "${icon_battery_70}";
-            if (current_soc >= 60)  return "${icon_battery_60}";
-            if (current_soc >= 50)  return "${icon_battery_50}";
-            if (current_soc >= 40)  return "${icon_battery_40}";
-            if (current_soc >= 30)  return "${icon_battery_30}";
-            if (current_soc >= 20)  return "${icon_battery_20}";
-            if (current_soc >= 10)  return "${icon_battery_10}";
-            return "${icon_battery_outline}";
+            float soc_val = id(battery_soc_sensor).state;
+            if (std::isnan(soc_val)) {
+                snprintf(buf, sizeof(buf), "%s", "${icon_battery_unknown}");
+                return buf;
+            }
+            
+            int soc = (int)std::lround(soc_val);
+            std::string icon;
+            
+            if (soc >= 100)     icon = "${icon_battery_full}";
+            else if (soc >= 90) icon = "${icon_battery_90}";
+            else if (soc >= 80) icon = "${icon_battery_80}";
+            else if (soc >= 70) icon = "${icon_battery_70}";
+            else if (soc >= 60) icon = "${icon_battery_60}";
+            else if (soc >= 50) icon = "${icon_battery_50}";
+            else if (soc >= 40) icon = "${icon_battery_40}";
+            else if (soc >= 30) icon = "${icon_battery_30}";
+            else if (soc >= 20) icon = "${icon_battery_20}";
+            else if (soc >= 10) icon = "${icon_battery_10}";
+            else                icon = "${icon_battery_outline}";
+            
+            snprintf(buf, sizeof(buf), "%s", icon.c_str());
+            return buf;
 
   - platform: template
     id: filtered_battery_v
@@ -987,16 +998,14 @@ sensor:
       if (millis() < 10000) return {}; 
       float filt = id(filtered_battery_v).state;
       
-      bool ha_charging = id(battery_charging_sensor).state;
-      
-      if (ha_charging) {
+      if (id(battery_charging_sensor).state) {
           return 100.0f; 
       }
       
       float soc_ha = 0.0f;
       if (filt <= 3.00f) soc_ha = 0.0f;
-      else if (filt <= 3.36f) soc_ha = 0.0f  + (filt - 3.00f) * (5.0f - 0.0f) / (3.36f - 3.00f);
-      else if (filt <= 3.41f) soc_ha = 5.0f  + (filt - 3.36f) * (10.0f - 5.0f) / (3.41f - 3.41f);
+      else if (filt <= 3.36f) soc_ha = 0.0f  + (filt - 3.00f) * (5.0f - 0.0f) / (3.36f - 3.36f);
+      else if (filt <= 3.41f) soc_ha = 5.0f  + (filt - 3.36f) * (10.0f - 5.0f) / (3.41f - 3.36f);
       else if (filt <= 3.48f) soc_ha = 10.0f + (filt - 3.41f) * (20.0f - 10.0f) / (3.48f - 3.41f);
       else if (filt <= 3.52f) soc_ha = 20.0f + (filt - 3.48f) * (30.0f - 20.0f) / (3.52f - 3.48f);
       else if (filt <= 3.56f) soc_ha = 30.0f + (filt - 3.52f) * (40.0f - 30.0f) / (3.56f - 3.52f);
@@ -1459,13 +1468,29 @@ binary_sensor:
       static int ha_on_b = 0; static int ha_off_b = 0;
 
       if (raw > (filt + 0.08f) || raw > 4.15f) { ha_on_b++; ha_off_b = 0; }
-      else if (raw < (filt - 0.02f) || (raw < 4.07f && raw < filt + 0.01f)) { ha_off_b++; ha_on_b = 0; }
-      else { ha_off_b = 0; }
+      else if (raw < (filt - 0.02f) && raw < 4.05f) { ha_off_b++; ha_on_b = 0; }
+      else { ha_on_b = 0; ha_off_b = 0; }
       
       if (ha_on_b >= 12) ha_charging_state = true;
-      if (ha_off_b >= 3) ha_charging_state = false;
+      if (ha_off_b >= 10) ha_charging_state = false; // 10 másodperces szűrő
       
       return ha_charging_state;
+
+  - platform: template
+    name: "${battery_fully_charged}"
+    id: battery_fully_charged_sensor
+    icon: "mdi:battery-check"
+    lambda: |-
+      if (millis() < 10000) return {};
+      
+      float filt_v = id(filtered_battery_v).state;
+      bool is_charging = id(battery_charging_sensor).state;
+      
+      if (is_charging && filt_v >= 4.20f) {
+          return true;
+      }
+      
+      return false;
 
   - platform: template
     id: sensor_lights
