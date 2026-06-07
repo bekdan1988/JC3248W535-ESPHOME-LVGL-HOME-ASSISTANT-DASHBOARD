@@ -417,6 +417,22 @@ script:
       - delay: 3s
       - button.press: system_shutdown
 
+  - id: script_cpu_save_mode
+    mode: restart
+    then:
+      - lambda: |-
+          rtc_cpu_freq_config_t cfg;
+          rtc_clk_cpu_freq_mhz_to_config(80, &cfg);
+          rtc_clk_cpu_freq_set_config(&cfg);
+
+  - id: script_cpu_perf_mode
+    mode: restart
+    then:
+      - lambda: |-
+          rtc_cpu_freq_config_t cfg;
+          rtc_clk_cpu_freq_mhz_to_config(240, &cfg);
+          rtc_clk_cpu_freq_set_config(&cfg);
+
   - id: delayed_wifi_off
     mode: restart
     then:
@@ -503,6 +519,8 @@ esphome:
   name: "${name}"
   friendly_name: "${friendly_name}"
   min_version: 2026.4.0
+  platformio_options:
+    build_flags: "-w -include soc/rtc.h -include esp_private/rtc_clk.h"
   on_boot:
     priority: -100
     then:
@@ -534,7 +552,7 @@ esphome:
               - api.connected:
       - delay: 800ms
       - lvgl.page.show: page_home
-      
+
 esp32: 
   board: esp32-s3-devkitc-1
   framework: 
@@ -609,6 +627,7 @@ touchscreen:
         - if:
             condition: lvgl.is_paused
             then:
+              - script.execute: script_cpu_perf_mode
               - script.stop: delayed_wifi_off
               - wifi.enable:
               - lvgl.resume:
@@ -676,9 +695,6 @@ ota:
 
 network:
     enable_high_performance: true
-
-esp32_ble:
-  enable_on_boot: false
 
 wifi:
   fast_connect: true
@@ -2378,6 +2394,7 @@ lvgl:
                 show_snow: true
             - light.turn_off: display_backlight
             - script.execute: delayed_wifi_off
+            - script.execute: script_cpu_save_mode
   
   on_all_events:
     - script.execute: script_delayed_sleep
