@@ -424,11 +424,19 @@ script:
           rtc_cpu_freq_config_t cfg;
           rtc_clk_cpu_freq_mhz_to_config(80, &cfg);
           rtc_clk_cpu_freq_set_config(&cfg);
+          
+          #if CONFIG_IDF_TARGET_ESP32S3
+          esp_sleep_pd_config(ESP_PD_DOMAIN_XTAL, ESP_PD_OPTION_OFF);
+          #endif
 
   - id: script_cpu_perf_mode
     mode: restart
     then:
       - lambda: |-
+          #if CONFIG_IDF_TARGET_ESP32S3
+          esp_sleep_pd_config(ESP_PD_DOMAIN_XTAL, ESP_PD_OPTION_ON);
+          #endif
+          
           rtc_cpu_freq_config_t cfg;
           rtc_clk_cpu_freq_mhz_to_config(240, &cfg);
           rtc_clk_cpu_freq_set_config(&cfg);
@@ -580,6 +588,8 @@ logger:
   level: "${logger_level}"
   logs:
     http_request: "${logger_http_request}"
+  tx_buffer_size: 160
+  hardware_uart: USB_SERIAL_JTAG
   
 psram:
   mode: octal
@@ -627,6 +637,8 @@ touchscreen:
         - if:
             condition: lvgl.is_paused
             then:
+              - lambda: |-
+                  id(my_touch).set_update_interval(30);
               - script.execute: script_cpu_perf_mode
               - script.stop: delayed_wifi_off
               - wifi.enable:
@@ -2391,10 +2403,12 @@ lvgl:
             - lvgl.page.show: page_home
             - delay: 200ms
             - lvgl.pause:
-                show_snow: true
+                show_snow: false
             - light.turn_off: display_backlight
             - script.execute: delayed_wifi_off
             - script.execute: script_cpu_save_mode
+            - lambda: |-
+                id(my_touch).set_update_interval(200);
   
   on_all_events:
     - script.execute: script_delayed_sleep
