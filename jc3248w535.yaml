@@ -15,6 +15,7 @@ substitutions:
   logger_http_request: "ERROR"                                        # Check log levels: https://esphome.io/components/logger/#log-levels
   reboot_timeout: "0s"                                                # Wi-Fi and API reboot timeout if not connected (0s - disabled)
   deep_sleep_seconds: "120"                                           # Seconds the device goes into deep sleep after display timeout
+  deep_sleep_duration: "1800s"                                        # Deep sleep duration (30 min)
   
   # LVGL SETTINGS
   timezone: "Europe/Budapest"                                         # Check: https://en.wikipedia.org/wiki/List_of_tz_database_time_zones
@@ -567,21 +568,31 @@ esp32:
   framework: 
     type: esp-idf
     sdkconfig_options:
+      CONFIG_COMPILER_OPTIMIZATION_PERF: y
+      CONFIG_ESPTOOLPY_FLASHFREQ_80M: y
+      CONFIG_ESPTOOLPY_FLASHMODE_OPI: y
+      CONFIG_ESPTOOLPY_FLASHSIZE_16MB: y
+      CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ_240: y
+      CONFIG_ESP_TASK_WDT_TIMEOUT_S: "60"
+      CONFIG_ESP_INT_WDT_TIMEOUT_MS: "1000"
       CONFIG_ESP32_BROWNOUT_DET_LVL: "0"
+      CONFIG_LV_ATTRIBUTE_FAST_MEM: n
+      CONFIG_LV_ATTRIBUTE_MEM_ALIGN: "4"
+      CONFIG_LV_DRAW_BUF_ALIGN: "64"
+      CONFIG_LV_USE_DRAW_ARM2D_SYNC: n
+      CONFIG_LV_USE_GPU_ARM2D: n
+      CONFIG_LV_USE_MATH_FAST: y
+      CONFIG_LV_USE_PERF_MONITOR: n
       CONFIG_LV_MEM_CUSTOM: y
       CONFIG_LV_MEM_ADR: "0x0"
-      CONFIG_LV_ATTRIBUTE_FAST_MEM: y
-      CONFIG_LV_VDB_SIZE: "32"
-      CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ_240: y
-      CONFIG_COMPILER_OPTIMIZATION_PERF: y
-      CONFIG_SPIRAM_MODE_OCT: y
-      CONFIG_SPIRAM_SPEED_120M: y
+      CONFIG_LV_VDB_SIZE: "60"
+      CONFIG_SPIRAM_FETCH_INSTRUCTIONS: y
       CONFIG_SPIRAM_MALLOC_RESERVE_INTERNAL: "32768"
       CONFIG_SPIRAM_MALLOC_ALWAYSINTERNAL: "4096"
-      CONFIG_ESP_TASK_WDT_TIMEOUT_S: "60"
-      CONFIG_ESPTOOLPY_FLASHMODE_OPI: y
-      CONFIG_ESPTOOLPY_FLASHFREQ_80M: y
-      CONFIG_LV_USE_PERF_MONITOR: n
+      CONFIG_SPIRAM_MODE_OCT: y
+      CONFIG_SPIRAM_RODATA: y
+      CONFIG_SPIRAM_SPEED_120M: y
+      CONFIG_SPIRAM_TRY_ALLOCATE_FIRST_FROM_INTERNAL: y
   flash_size: 16MB
 
 logger:
@@ -671,6 +682,7 @@ touchscreen:
 
 deep_sleep:
   id: ds_control
+  sleep_duration: "${deep_sleep_duration}"
 
 api:
   encryption:
@@ -2413,7 +2425,7 @@ lvgl:
   rotation: 270
   buffer_size: 60%
   color_depth: 16
-  update_interval: "32ms"
+  update_interval: never
   bg_color: 0x000000
   resume_on_input: false
           
