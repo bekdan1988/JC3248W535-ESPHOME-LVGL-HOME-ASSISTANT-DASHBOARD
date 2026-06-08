@@ -68,7 +68,6 @@ substitutions:
   icon_arrow_left: "\U000F004D"                                       # mdi:arrow-left
   icon_camera: "\U000F07AE"                                           # mdi:cctv
   icon_timer: "\U000F13AB"                                            # mdi:timer
-  icon_ds: "\U000F0904"                                               # mdi:power-sleep
   icon_brightness: "\U000F00DF"                                       # mdi:brightness-6
   icon_power_sleep: "\U000F0904"                                      # mdi:power-sleep
   icon_window: "\U000F05AE"                                           # mdi:window-closed
@@ -452,7 +451,21 @@ script:
   - id: script_delayed_sleep
     mode: restart
     then:
-      - delay: !lambda "return (id(timeout_value) + ${deep_sleep_seconds}) * 1000;"
+      - delay: !lambda "return id(timeout_value) * 1000;"
+      - if:
+          condition:
+            lambda: 'return !id(is_camera_page_active);'
+          then:
+            - lvgl.page.show: page_home
+            - delay: 200ms
+            - lvgl.pause:
+                show_snow: false
+            - light.turn_off: display_backlight
+            - script.execute: delayed_wifi_off
+            - script.execute: script_cpu_save_mode
+            - lambda: |-
+                id(my_touch).set_update_interval(200);
+      - delay: !lambda 'return atoi("${deep_sleep_seconds}") * 1000;'
       - if:
           condition:
             lambda: 'return !id(sleep_prevent_enabled);'
@@ -671,6 +684,7 @@ touchscreen:
                           api.connected:
                   then:
                     - lvgl.page.show: page_no_api_connection
+              - script.execute: script_delayed_sleep
 
     on_touch:
       then:
@@ -2428,26 +2442,6 @@ lvgl:
   update_interval: never
   bg_color: 0x000000
   resume_on_input: false
-          
-  on_idle:
-    timeout: !lambda 'return id(timeout_value) * 1000;'
-    then:
-      - if:
-          condition:
-            lambda: 'return !id(is_camera_page_active);'
-          then:
-            - lvgl.page.show: page_home
-            - delay: 200ms
-            - lvgl.pause:
-                show_snow: false
-            - light.turn_off: display_backlight
-            - script.execute: delayed_wifi_off
-            - script.execute: script_cpu_save_mode
-            - lambda: |-
-                id(my_touch).set_update_interval(200);
-  
-  on_all_events:
-    - script.execute: script_delayed_sleep
 
   theme:
     label:
@@ -4397,7 +4391,7 @@ lvgl:
                           align: CENTER
                           text_font: f_medium
                           styles: style_label_icon_56
-                          text: "${icon_timer} ${timeout_60}\n${icon_ds} ${ds_3}"
+                          text: "${icon_timer} ${timeout_60}\n${icon_power_sleep} ${ds_3}"
                   on_click:
                     then:
                       - script.execute:
@@ -4414,7 +4408,7 @@ lvgl:
                           align: CENTER
                           text_font: f_medium
                           styles: style_label_icon_56
-                          text: "${icon_timer} ${timeout_120}\n${icon_ds} ${ds_4}"
+                          text: "${icon_timer} ${timeout_120}\n${icon_power_sleep} ${ds_4}"
                   on_click:
                     then:
                       - script.execute:
@@ -4431,7 +4425,7 @@ lvgl:
                           align: CENTER
                           text_font: f_medium
                           styles: style_label_icon_56
-                          text: "${icon_timer} ${timeout_180}\n${icon_ds} ${ds_5}"
+                          text: "${icon_timer} ${timeout_180}\n${icon_power_sleep} ${ds_5}"
                   on_click:
                     then:
                       - script.execute:
