@@ -106,7 +106,7 @@ substitutions:
   prevent_sleep_ha: "Mélyalvás megakadályozása"                       # EN: "Prevent deep sleep"
   battery: "Akkumulátor"                                              # EN: "Battery"
   battery_charging: "Akkumulátor töltés"                              # EN: "Battery charging"
-  battery_fully_charged: "Akkumulátor teljesen feltöltve"             # EN: "Battery Fully Charged"
+  battery_fully_charged: "Akkumulátor teljesen feltöltve"             # EN: "Battery fully charged"
   
     # MAIN MENU
   page_name_home: "KEZDŐLAP"                                          # EN: "HOME"
@@ -175,7 +175,8 @@ substitutions:
   entrance: "Bejárat"                                                 # EN: "Entrance"
   patio: "Terasz"                                                     # EN: "Patio"
   living_room: "Nappali"                                              # EN: "Living room"
-  dining_room: "Ebédlő"                                               # EN: "Dining Room"
+  master_bedroom: "Fő hálószoba"                                      # EN: "Master bedroom
+  dining_room: "Ebédlő"                                               # EN: "Dining room"
   kitchen: "Konyha"                                                   # EN: "Kitchen"
   bedside_lamp_1: "Lámpa Dani"                                        # EN: "Daniel's lamp"     
   bedside_lamp_2: "Lámpa Eszti"                                       # EN: "Eszter's lamp"
@@ -1529,7 +1530,8 @@ binary_sensor:
              id(dining_room_light).state || 
              id(kitchen_light).state || 
              id(bedside_lamp_1_socket).state || 
-             id(bedside_lamp_2_socket).state;
+             id(bedside_lamp_2_socket).state ||
+             id(master_bedroom_light).state;
     on_state:
       then:
         - lvgl.label.update:
@@ -1728,6 +1730,28 @@ binary_sensor:
       then:
         - lambda: |-
             auto btn = id(btn_bedside_lamp_2_socket);
+            bool is_unavailable = std::isnan(x);
+            if (is_unavailable) {
+                lv_obj_add_state(btn, LV_STATE_DISABLED);
+                lv_obj_set_style_opa(btn, 100, 0);
+            } else {
+                lv_obj_clear_state(btn, LV_STATE_DISABLED);
+                lv_obj_set_style_opa(btn, 255, 0);
+                if (x) {
+                    lv_obj_add_state(btn, LV_STATE_CHECKED);
+                } else {
+                    lv_obj_clear_state(btn, LV_STATE_CHECKED);
+                }
+            }
+  
+  - platform: homeassistant
+    id: master_bedroom_light
+    entity_id: light.fo_haloszoba_zenbreeze_smart
+    trigger_on_initial_state: true
+    on_state:
+      then:
+        - lambda: |-
+            auto btn = id(btn_master_bedroom_light);
             bool is_unavailable = std::isnan(x);
             if (is_unavailable) {
                 lv_obj_add_state(btn, LV_STATE_DISABLED);
@@ -3042,6 +3066,21 @@ lvgl:
                         data:
                           entity_id: light.konyha_vilagitas
               
+              - button:
+                  id: btn_master_bedroom_light
+                  press_lock: false
+                  styles: style_toggle_btn
+                  checkable: true
+                  widgets:
+                    - label:
+                        align: CENTER
+                        text: "${master_bedroom}"
+                  on_click:
+                    - homeassistant.action:
+                        action: light.toggle
+                        data:
+                          entity_id: light.fo_haloszoba_zenbreeze_smart
+
               - button:
                   id: btn_bedside_lamp_1_socket
                   press_lock: false
