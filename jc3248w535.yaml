@@ -15,7 +15,9 @@ substitutions:
   logger_http_request: "ERROR"                                        # Check log levels: https://esphome.io/components/logger/#log-levels
   reboot_timeout: "0s"                                                # Wi-Fi and API reboot timeout if not connected (0s - disabled)
   deep_sleep_seconds: "120"                                           # Seconds the device goes into deep sleep after display timeout
-  deep_sleep_duration: "1800s"                                        # Deep sleep duration (30 min)
+  deep_sleep_duration: "3600"                                         # Deep sleep duration in seconds (60 min)
+  auto_deep_sleep_start: "20"                                         # Auto deep sleep start hour (default: 20)
+  auto_deep_sleep_stop: "6"                                           # Auto deep sleep stop hour (default: 6)
   
   # LVGL SETTINGS
   timezone: "Europe/Budapest"                                         # Check: https://en.wikipedia.org/wiki/List_of_tz_database_time_zones
@@ -70,6 +72,7 @@ substitutions:
   icon_timer: "\U000F13AB"                                            # mdi:timer
   icon_brightness: "\U000F00DF"                                       # mdi:brightness-6
   icon_power_sleep: "\U000F0904"                                      # mdi:power-sleep
+  icon_clock_start: "\U000F0155"                                      # mdi:clock-start
   icon_window: "\U000F05AE"                                           # mdi:window-closed
   icon_door: "\U000F081B"                                             # mdi:door-closed
   icon_thermometer: "\U000F050F"                                      # mdi:thermometer
@@ -103,6 +106,7 @@ substitutions:
   display_timeout: "Képernyő kikapcsolási ideje"                      # EN: "Display timeout"
   uptime: "Üzemidő"                                                   # EN: "Uptime"
   uptime_days_unit_of_measurement: "óra"                              # EN: "hours"
+  auto_sleep_ha: "Mélyalvás éjszaka"                                  # EN: "Night deep sleep"
   prevent_sleep_ha: "Mélyalvás megakadályozása"                       # EN: "Prevent deep sleep"
   battery: "Akkumulátor"                                              # EN: "Battery"
   battery_charging: "Akkumulátor töltés"                              # EN: "Battery charging"
@@ -129,6 +133,7 @@ substitutions:
   ds_4: "4 perc"                                                      # EN: "4 min"
   ds_5: "5 perc"                                                      # EN: "5 min"
   display_brightness: "KIJELZŐ FÉNYERŐ"                               # EN: "DISPLAY BRIGTHNESS"
+  auto_sleep: "MÉLYALVÁS ÉJSZAKA"                                     # EN: "NIGHT DEEP SLEEP"
   prevent_sleep: "MÉLYALVÁS MEGAKADÁLYOZÁSA"                          # EN: "PREVENT DEEP SLEEP"
   
     # INFORMATION PAGE
@@ -392,6 +397,7 @@ font:
           "${icon_brightness}",
           "${icon_timer}",
           "${icon_power_sleep}",
+          "${icon_clock_start}",
           "${icon_heat}",
           "${icon_snowflake}",
           "${icon_wifi_off}",
@@ -424,8 +430,7 @@ script:
       - lambda: |-
           rtc_cpu_freq_config_t cfg;
           rtc_clk_cpu_freq_mhz_to_config(80, &cfg);
-          rtc_clk_cpu_freq_set_config(&cfg);
-          
+          rtc_clk_cpu_freq_set_config(&cfg);          
           #if CONFIG_IDF_TARGET_ESP32S3
           esp_sleep_pd_config(ESP_PD_DOMAIN_XTAL, ESP_PD_OPTION_OFF);
           #endif
@@ -436,8 +441,7 @@ script:
       - lambda: |-
           #if CONFIG_IDF_TARGET_ESP32S3
           esp_sleep_pd_config(ESP_PD_DOMAIN_XTAL, ESP_PD_OPTION_ON);
-          #endif
-          
+          #endif          
           rtc_cpu_freq_config_t cfg;
           rtc_clk_cpu_freq_mhz_to_config(240, &cfg);
           rtc_clk_cpu_freq_set_config(&cfg);
@@ -470,7 +474,14 @@ script:
           condition:
             lambda: 'return !id(sleep_prevent_enabled);'
           then:
-            - deep_sleep.enter: ds_control
+            - deep_sleep.enter:
+                id: ds_control
+                sleep_duration: !lambda |-
+                  int total_awake_seconds = id(timeout_value) + atoi("${deep_sleep_seconds}");
+                  int base_sleep_seconds = atoi("${deep_sleep_duration}"); 
+                  int corrected_seconds = base_sleep_seconds - total_awake_seconds;
+                  if (corrected_seconds < 1) { corrected_seconds = 1; } 
+                  return corrected_seconds * 1000;
   
   - id: script_set_timeout
     parameters:
@@ -562,12 +573,52 @@ esphome:
       - script.execute: line_burn_in_protection
       - if:
           condition:
+            lambda: 'return id(auto_deep_sleep_enabled);'
+          then:
+            - lambda: |-
+                #if CONFIG_IDF_TARGET_ESP32S3
+                esp_sleep_wakeup_cause_t wakeup_reason = esp_sleep_get_wakeup_cause();
+                bool is_auto_timer_wakeup = (wakeup_reason == ESP_SLEEP_WAKEUP_TIMER);
+                #else
+                bool is_auto_timer_wakeup = true; 
+                #endif
+                auto time_now = id(sntp_time).now();
+                if (time_now.is_valid()) {
+                    int current_hour = time_now.hour;
+                    int stop_hour = atoi("${auto_deep_sleep_stop}");   // Ez a 6 óra
+                    int start_hour = atoi("${auto_deep_sleep_start}"); // Ez a 20 óra
+                    if (is_auto_timer_wakeup && (current_hour >= stop_hour && current_hour < start_hour) && id(prevent_was_switched_by_auto)) {
+                        id(sleep_prevent_enabled) = true;
+                        id(prevent_was_switched_by_auto) = false; // Reseteljük a jelzőt nappalra
+                    }
+                    else if (current_hour >= start_hour || current_hour < stop_hour) {
+                        id(sleep_prevent_enabled) = false;
+                        id(prevent_was_switched_by_auto) = true;
+                    }
+                }
+      - if:
+          condition:
             lambda: 'return id(sleep_prevent_enabled);'
           then:
             - switch.turn_on: prevent_sleep_switch
           else:
             - switch.turn_off: prevent_sleep_switch
             - script.execute: script_delayed_sleep
+      - wait_until:
+          condition:
+            and:
+              - wifi.connected:
+              - api.connected:
+      - delay: 800ms
+      - lvgl.page.show: page_home
+      - if:
+          condition:
+            lambda: 'return id(sleep_prevent_enabled);'
+          then:
+            - switch.turn_on: prevent_sleep_switch
+          else:
+            - switch.turn_off: prevent_sleep_switch
+            - script.execute: script_delayed_sleep     
       - wait_until:
           condition:
             and:
@@ -685,9 +736,9 @@ touchscreen:
                   then:
                     - lvgl.page.show: page_no_api_connection
               - script.execute: script_delayed_sleep
-
     on_touch:
       then:
+        - script.execute: script_delayed_sleep
         - if:
             condition:
               lambda: 'return id(is_camera_page_active);'
@@ -696,7 +747,7 @@ touchscreen:
 
 deep_sleep:
   id: ds_control
-  sleep_duration: "${deep_sleep_duration}"
+  sleep_duration: "${deep_sleep_duration}s"
 
 api:
   encryption:
@@ -785,6 +836,21 @@ time:
           - lvgl.label.update:
               id: lbl_clock
               text: !lambda return id(sntp_time).now().strftime("${clock_time_format}");
+          - if:
+              condition:
+                lambda: |-
+                  if (!id(auto_deep_sleep_enabled)) return false;
+                  auto time_now = id(sntp_time).now();
+                  if (time_now.is_valid()) {
+                      int h = time_now.hour;
+                      if ((h >= 20 || h < 6) && id(sleep_prevent_enabled)) {
+                          return true;
+                      }
+                  }
+                  return false;
+              then:
+                - globals.set: { id: prevent_was_switched_by_auto, value: 'true' }
+                - switch.turn_off: prevent_sleep_switch
 
 number:
   - platform: template
@@ -858,6 +924,21 @@ globals:
     restore_value: yes
     initial_value: 'true'
 
+  - id: auto_deep_sleep_enabled
+    type: bool
+    restore_value: yes
+    initial_value: 'false'
+
+  - id: prevent_was_switched_by_auto
+    type: bool
+    restore_value: yes
+    initial_value: 'false'
+
+  - id: boot_timestamp
+    type: uint32_t
+    restore_value: no
+    initial_value: '0'
+
 interval:
   - interval: "${camera_update_interval}"
     then:
@@ -882,28 +963,48 @@ interval:
 
 switch:
   - platform: template
+    name: "${auto_sleep_ha}"
+    id: auto_deep_sleep_switch
+    icon: mdi:clock-start
+    optimistic: true
+    restore_mode: RESTORE_DEFAULT_OFF
+    on_turn_on:
+      then:
+        - globals.set: { id: auto_deep_sleep_enabled, value: 'true' }
+        - lambda: |-
+            if (id(auto_sleep_sw_widget) != nullptr) {
+              lv_obj_add_state(id(auto_sleep_sw_widget), LV_STATE_CHECKED);
+            }
+    on_turn_off:
+      then:
+        - globals.set: { id: auto_deep_sleep_enabled, value: 'false' }
+        - lambda: |-
+            if (id(auto_sleep_sw_widget) != nullptr) {
+              lv_obj_clear_state(id(auto_sleep_sw_widget), LV_STATE_CHECKED);
+            }
+        - switch.turn_on: prevent_sleep_switch
+  - platform: template
     name: "${prevent_sleep_ha}"
     id: prevent_sleep_switch
     icon: mdi:power-sleep
     optimistic: true
-    restore_mode: RESTORE_DEFAULT_OFF
-    on_state:
-      - if:
-          condition:
-            lambda: 'return x;'
-          then:
-            - globals.set: { id: sleep_prevent_enabled, value: 'true' }
-            - lambda: |-
-                if (id(sleep_sw_widget) != nullptr) {
-                  lv_obj_add_state(id(sleep_sw_widget), LV_STATE_CHECKED);
-                }
-          else:
-            - globals.set: { id: sleep_prevent_enabled, value: 'false' }
-            - script.execute: script_delayed_sleep
-            - lambda: |-
-                if (id(sleep_sw_widget) != nullptr) {
-                  lv_obj_clear_state(id(sleep_sw_widget), LV_STATE_CHECKED);
-                }
+    restore_mode: RESTORE_DEFAULT_ON
+    on_turn_on:
+      then:
+        - globals.set: { id: sleep_prevent_enabled, value: 'true' }
+        - globals.set: { id: prevent_was_switched_by_auto, value: 'false' }
+        - lambda: |-
+            if (id(sleep_sw_widget) != nullptr) {
+              lv_obj_add_state(id(sleep_sw_widget), LV_STATE_CHECKED);
+            }
+    on_turn_off:
+      then:
+        - globals.set: { id: sleep_prevent_enabled, value: 'false' }
+        - script.execute: script_delayed_sleep
+        - lambda: |-
+            if (id(sleep_sw_widget) != nullptr) {
+              lv_obj_clear_state(id(sleep_sw_widget), LV_STATE_CHECKED);
+            }
 
   - platform: homeassistant
     id: kids_room_socket_auto_turn_off
@@ -977,45 +1078,36 @@ sensor:
       - lvgl.label.update:
           id: batt_label
           text_font: f_tray_icons  
-          
           text_color: !lambda |-
             bool is_charging = id(battery_charging_sensor).state;
             float filt_v = id(filtered_battery_v).state;
-            
             if (is_charging) {
 
                 if (filt_v >= 4.20f) return id(color_screamin_green);
                 return id(color_whitesmoke);
-            }
-            
+            }   
             float current_soc = id(battery_soc_sensor).state;
             if (!std::isnan(current_soc) && current_soc <= 20.0f) {
                 return id(color_red);
             }
             return id(color_whitesmoke);
-
           text: !lambda |-
-            static char buf[10]; 
-            
+            static char buf[10];             
             if (millis() < 10000) {
                 snprintf(buf, sizeof(buf), "%s", "${icon_battery_unknown}");
                 return buf;
-            }
-            
+            }            
             if (id(battery_charging_sensor).state) {
                 snprintf(buf, sizeof(buf), "%s", "${icon_power_plug_battery}");
                 return buf;
-            }
-            
+            }            
             float soc_val = id(battery_soc_sensor).state;
             if (std::isnan(soc_val)) {
                 snprintf(buf, sizeof(buf), "%s", "${icon_battery_unknown}");
                 return buf;
-            }
-            
+            }            
             int soc = (int)std::lround(soc_val);
-            std::string icon;
-            
+            std::string icon;            
             if (soc >= 100)     icon = "${icon_battery_full}";
             else if (soc >= 90) icon = "${icon_battery_90}";
             else if (soc >= 80) icon = "${icon_battery_80}";
@@ -1027,7 +1119,6 @@ sensor:
             else if (soc >= 20) icon = "${icon_battery_20}";
             else if (soc >= 10) icon = "${icon_battery_10}";
             else                icon = "${icon_battery_outline}";
-            
             snprintf(buf, sizeof(buf), "%s", icon.c_str());
             return buf;
 
@@ -1052,11 +1143,9 @@ sensor:
     lambda: |-
       if (millis() < 10000) return {}; 
       float filt = id(filtered_battery_v).state;
-      
       if (id(battery_charging_sensor).state) {
           return 100.0f; 
       }
-      
       float soc_ha = 0.0f;
       if (filt <= 3.00f) soc_ha = 0.0f;
       else if (filt <= 3.36f) soc_ha = 0.0f  + (filt - 3.00f) * (5.0f - 0.0f) / (3.36f - 3.36f);
@@ -1071,7 +1160,6 @@ sensor:
       else if (filt <= 3.98f) soc_ha = 80.0f + (filt - 3.89f) * (90.0f - 80.0f) / (3.98f - 3.89f);
       else if (filt <= 4.02f) soc_ha = 90.0f + (filt - 3.98f) * (100.0f - 90.0f) / (4.02f - 3.98f);
       else soc_ha = 100.0f;
-
       if (soc_ha > 100.0f) return 100.0f;
       if (soc_ha < 0.0f) return 0.0f;
       return soc_ha;
@@ -1521,14 +1609,11 @@ binary_sensor:
       float filt = id(filtered_battery_v).state;
       static bool ha_charging_state = false;
       static int ha_on_b = 0; static int ha_off_b = 0;
-
       if (raw > (filt + 0.08f) || raw > 4.15f) { ha_on_b++; ha_off_b = 0; }
       else if (raw < (filt - 0.02f) && raw < 4.05f) { ha_off_b++; ha_on_b = 0; }
       else { ha_on_b = 0; ha_off_b = 0; }
-      
       if (ha_on_b >= 12) ha_charging_state = true;
       if (ha_off_b >= 10) ha_charging_state = false; // 10 másodperces szűrő
-      
       return ha_charging_state;
 
   - platform: template
@@ -1537,14 +1622,11 @@ binary_sensor:
     icon: "mdi:battery-check"
     lambda: |-
       if (millis() < 10000) return {};
-      
       float filt_v = id(filtered_battery_v).state;
       bool is_charging = id(battery_charging_sensor).state;
-      
       if (is_charging && filt_v >= 4.20f) {
           return true;
       }
-      
       return false;
 
   - platform: template
@@ -4480,6 +4562,40 @@ lvgl:
                           id: saved_brightness
                           value: !lambda "return x;"
 
+              - label:
+                  id: lbl_auto_sleep
+                  text_font: f_medium
+                  text_color: color_whitesmoke
+                  text: "${icon_clock_start} ${auto_sleep}"
+
+              - switch:
+                  id: auto_sleep_sw_widget
+                  bg_color: color_gray20
+                  bg_grad_dir: NONE
+                  bg_opa: COVER
+                  indicator:
+                    bg_color: color_sapphire
+                    checked:
+                      bg_color: color_sapphire
+                      bg_opa: COVER
+                  focused:
+                    outline_width: 0
+                  knob:
+                    bg_color: color_dark_gray
+                    checked:
+                      bg_color: color_deep_sky_blue
+                    shadow_color: color_gray20
+                    shadow_width: 20
+                    shadow_opa: COVER
+                  on_change:
+                    - if:
+                        condition:
+                          lambda: 'return x;'
+                        then:
+                          - switch.turn_on: auto_deep_sleep_switch
+                        else:
+                          - switch.turn_off: auto_deep_sleep_switch
+              
               - label:
                   id: lbl_sleep
                   text_font: f_medium
