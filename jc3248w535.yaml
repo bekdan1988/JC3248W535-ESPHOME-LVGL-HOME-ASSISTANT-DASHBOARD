@@ -4,8 +4,6 @@ substitutions:
   ota_password: !secret jc3248w535_ota_password
   wifi_ssid: !secret wifi_ssid
   wifi_password: !secret wifi_password
-  wifi_ap_ssid: !secret jc3248w535_ap_ssid
-  wifi_ap_password: !secret jc3248w535_ap_password
   home_assistant_url: !secret ha_url                                  # e.g.: http://192.168.0.200:8123
 
   # DEVICE SETTINGS
@@ -451,7 +449,7 @@ script:
     then:
       - delay: 30s
       - wifi.disable:
-
+  
   - id: script_delayed_sleep
     mode: restart
     then:
@@ -482,7 +480,7 @@ script:
                   int corrected_seconds = base_sleep_seconds - total_awake_seconds;
                   if (corrected_seconds < 1) { corrected_seconds = 1; } 
                   return corrected_seconds * 1000;
-  
+
   - id: script_set_timeout
     parameters:
       value: int
@@ -603,7 +601,6 @@ esphome:
             - switch.turn_on: prevent_sleep_switch
           else:
             - switch.turn_off: prevent_sleep_switch
-            - script.execute: script_delayed_sleep
       - wait_until:
           condition:
             and:
@@ -611,21 +608,7 @@ esphome:
               - api.connected:
       - delay: 800ms
       - lvgl.page.show: page_home
-      - if:
-          condition:
-            lambda: 'return id(sleep_prevent_enabled);'
-          then:
-            - switch.turn_on: prevent_sleep_switch
-          else:
-            - switch.turn_off: prevent_sleep_switch
-            - script.execute: script_delayed_sleep     
-      - wait_until:
-          condition:
-            and:
-              - wifi.connected:
-              - api.connected:
-      - delay: 800ms
-      - lvgl.page.show: page_home
+      - script.execute: script_delayed_sleep
 
 esp32: 
   board: esp32-s3-devkitc-1
@@ -793,9 +776,6 @@ wifi:
   ssid: "${wifi_ssid}"
   password: "${wifi_password}"
   use_psram: True
-  ap:
-    ssid: "${wifi_ap_ssid}"
-    password: "${wifi_ap_password}"
   on_connect:
     then:
       - delay: 500ms
@@ -818,8 +798,6 @@ wifi:
               lvgl.is_paused:
           then:
             - lvgl.page.show: page_no_wifi_connection
-
-captive_portal:
 
 time:
   - platform: sntp
@@ -1100,20 +1078,13 @@ sensor:
             if (charging_active) {
                 charge_lock = true;
             }
-            if (current_v >= 4.20f || current_v < 4.00f) {
+            if (current_v < 4.00f) {
                 charge_lock = false;
             }
-            if (charge_lock && current_v < 4.20f) {
+            if (charging_active || charge_lock) {
                 snprintf(buf, sizeof(buf), "%s", "${icon_power_plug_battery}");
                 return buf;
             }
-            if (charging_active || current_v >= 4.20f) {
-                snprintf(buf, sizeof(buf), "%s", "${icon_power_plug_battery}");
-                if (current_v >= 4.20f) {
-                    snprintf(buf, sizeof(buf), "%s", "${icon_battery_full}");
-                }
-                return buf;
-            }            
             float soc_val = id(battery_soc_sensor).state;
             if (std::isnan(soc_val)) {
                 snprintf(buf, sizeof(buf), "%s", "${icon_battery_unknown}");
