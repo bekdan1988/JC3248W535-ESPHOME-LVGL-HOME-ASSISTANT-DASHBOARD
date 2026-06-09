@@ -601,13 +601,7 @@ esphome:
             - switch.turn_on: prevent_sleep_switch
           else:
             - switch.turn_off: prevent_sleep_switch
-      - wait_until:
-          condition:
-            and:
-              - wifi.connected:
-              - api.connected:
-      - delay: 800ms
-      - lvgl.page.show: page_home
+      - delay: 1s
       - script.execute: script_delayed_sleep
 
 esp32: 
@@ -972,7 +966,7 @@ switch:
         - lambda: |-
             if (id(sleep_sw_widget) != nullptr) {
               lv_obj_add_state(id(sleep_sw_widget), LV_STATE_CHECKED);
-            }
+            }       
     on_turn_off:
       then:
         - globals.set: { id: sleep_prevent_enabled, value: 'false' }
