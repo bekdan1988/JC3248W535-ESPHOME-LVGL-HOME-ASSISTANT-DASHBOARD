@@ -843,7 +843,11 @@ time:
                   auto time_now = id(sntp_time).now();
                   if (time_now.is_valid()) {
                       int h = time_now.hour;
-                      if ((h >= 20 || h < 6) && id(sleep_prevent_enabled)) {
+                      int start_hour = atoi("${auto_deep_sleep_start}");
+                      int stop_hour = atoi("${auto_deep_sleep_stop}");
+                      
+                      // Univerzális idősáv ellenőrzés a te változóid alapján:
+                      if ((h >= start_hour || h < stop_hour) && id(sleep_prevent_enabled)) {
                           return true;
                       }
                   }
@@ -933,11 +937,6 @@ globals:
     type: bool
     restore_value: yes
     initial_value: 'false'
-
-  - id: boot_timestamp
-    type: uint32_t
-    restore_value: no
-    initial_value: '0'
 
 interval:
   - interval: "${camera_update_interval}"
