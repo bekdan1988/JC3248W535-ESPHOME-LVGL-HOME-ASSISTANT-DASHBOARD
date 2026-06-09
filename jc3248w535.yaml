@@ -1082,7 +1082,6 @@ sensor:
             bool is_charging = id(battery_charging_sensor).state;
             float filt_v = id(filtered_battery_v).state;
             if (is_charging) {
-
                 if (filt_v >= 4.20f) return id(color_screamin_green);
                 return id(color_whitesmoke);
             }   
@@ -1097,8 +1096,24 @@ sensor:
                 snprintf(buf, sizeof(buf), "%s", "${icon_battery_unknown}");
                 return buf;
             }            
-            if (id(battery_charging_sensor).state) {
+            static bool charge_lock = false;
+            bool charging_active = id(battery_charging_sensor).state;
+            float current_v = id(filtered_battery_v).state;
+            if (charging_active) {
+                charge_lock = true;
+            }
+            if (current_v >= 4.20f || current_v < 4.00f) {
+                charge_lock = false;
+            }
+            if (charge_lock && current_v < 4.20f) {
                 snprintf(buf, sizeof(buf), "%s", "${icon_power_plug_battery}");
+                return buf;
+            }
+            if (charging_active || current_v >= 4.20f) {
+                snprintf(buf, sizeof(buf), "%s", "${icon_power_plug_battery}");
+                if (current_v >= 4.20f) {
+                    snprintf(buf, sizeof(buf), "%s", "${icon_battery_full}");
+                }
                 return buf;
             }            
             float soc_val = id(battery_soc_sensor).state;
