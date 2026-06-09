@@ -1613,7 +1613,7 @@ binary_sensor:
       else if (raw < (filt - 0.02f) && raw < 4.05f) { ha_off_b++; ha_on_b = 0; }
       else { ha_on_b = 0; ha_off_b = 0; }
       if (ha_on_b >= 12) ha_charging_state = true;
-      if (ha_off_b >= 10) ha_charging_state = false; // 10 másodperces szűrő
+      if (ha_off_b >= 10) ha_charging_state = false;
       return ha_charging_state;
 
   - platform: template
