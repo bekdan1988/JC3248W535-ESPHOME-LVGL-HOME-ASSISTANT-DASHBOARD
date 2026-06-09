@@ -845,8 +845,6 @@ time:
                       int h = time_now.hour;
                       int start_hour = atoi("${auto_deep_sleep_start}");
                       int stop_hour = atoi("${auto_deep_sleep_stop}");
-                      
-                      // Univerzális idősáv ellenőrzés a te változóid alapján:
                       if ((h >= start_hour || h < stop_hour) && id(sleep_prevent_enabled)) {
                           return true;
                       }
