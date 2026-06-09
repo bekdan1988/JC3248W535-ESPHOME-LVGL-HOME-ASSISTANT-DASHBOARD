@@ -983,6 +983,7 @@ switch:
               lv_obj_clear_state(id(auto_sleep_sw_widget), LV_STATE_CHECKED);
             }
         - switch.turn_on: prevent_sleep_switch
+  
   - platform: template
     name: "${prevent_sleep_ha}"
     id: prevent_sleep_switch
