@@ -585,11 +585,11 @@ esphome:
                 auto time_now = id(sntp_time).now();
                 if (time_now.is_valid()) {
                     int current_hour = time_now.hour;
-                    int stop_hour = atoi("${auto_deep_sleep_stop}");   // Ez a 6 óra
-                    int start_hour = atoi("${auto_deep_sleep_start}"); // Ez a 20 óra
+                    int stop_hour = atoi("${auto_deep_sleep_stop}");
+                    int start_hour = atoi("${auto_deep_sleep_start}");
                     if (is_auto_timer_wakeup && (current_hour >= stop_hour && current_hour < start_hour) && id(prevent_was_switched_by_auto)) {
                         id(sleep_prevent_enabled) = true;
-                        id(prevent_was_switched_by_auto) = false; // Reseteljük a jelzőt nappalra
+                        id(prevent_was_switched_by_auto) = false;
                     }
                     else if (current_hour >= start_hour || current_hour < stop_hour) {
                         id(sleep_prevent_enabled) = false;
