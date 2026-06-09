@@ -10,19 +10,19 @@ substitutions:
 
   # DEVICE SETTINGS
   name: "jc3248w535"                                                  # Device's internal name. E.g. on network
-  friendly_name: "JC3248W535"                                         # Device's name in Home Assistant.
+  friendly_name: "JC3248W535"                                         # Device's name in Home Assistant
   logger_level: "ERROR"                                               # Check log levels: https://esphome.io/components/logger/#log-levels
   logger_http_request: "ERROR"                                        # Check log levels: https://esphome.io/components/logger/#log-levels
   reboot_timeout: "0s"                                                # Wi-Fi and API reboot timeout if not connected (0s - disabled)
   deep_sleep_seconds: "120"                                           # Seconds the device goes into deep sleep after display timeout
   deep_sleep_duration: "3600"                                         # Deep sleep duration in seconds (60 min)
-  auto_deep_sleep_start: "20"                                         # Auto deep sleep start hour (default: 20)
-  auto_deep_sleep_stop: "6"                                           # Auto deep sleep stop hour (default: 6)
+  auto_deep_sleep_start: "20"                                         # Auto deep sleep start hour
+  auto_deep_sleep_stop: "6"                                           # Auto deep sleep stop hour
   
   # LVGL SETTINGS
   timezone: "Europe/Budapest"                                         # Check: https://en.wikipedia.org/wiki/List_of_tz_database_time_zones
   clock_time_format: "%m. %d. %H:%M"                                  # EN: "%d. %m. %H:%M"
-  boot_logo: "images/boot_logo.png"                                   # LVGL boot logo.
+  boot_logo: "https://raw.githubusercontent.com/bekdan1988/JC3248W535-ESPHOME-LVGL-HOME-ASSISTANT-DASHBOARD/main/images/boot_logo.png" # LVGL boot logo
   camera_update_interval: "3s"                                        # The update interval of the camera image in seconds
   hide_tray_timeout: "10s"                                            # Hide tray timeout
   img_camera_resolution: "&width=480&height=270"                      # The resolution of the downloaded camera image
