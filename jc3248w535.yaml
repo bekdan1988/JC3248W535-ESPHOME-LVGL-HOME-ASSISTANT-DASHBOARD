@@ -14,8 +14,8 @@ substitutions:
   reboot_timeout: "0s"                                                # Wi-Fi and API reboot timeout if not connected (0s - disabled)
   deep_sleep_seconds: "120"                                           # Seconds the device goes into deep sleep after display timeout
   deep_sleep_duration: "3600"                                         # Deep sleep duration in seconds (60 min)
-  scheduled_deep_sleep_start: "20"                                    # Scheduled deep sleep start hour
-  scheduled_deep_sleep_stop: "6"                                      # Scheduled deep sleep stop hour
+  night_deep_sleep_start: "20"                                        # Night deep sleep start hour
+  night_deep_sleep_stop: "6"                                          # Night deep sleep stop hour
   
   # LVGL SETTINGS
   timezone: "Europe/Budapest"                                         # Check: https://en.wikipedia.org/wiki/List_of_tz_database_time_zones
@@ -584,8 +584,8 @@ esphome:
                 auto time_now = id(sntp_time).now();
                 if (time_now.is_valid()) {
                     int current_hour = time_now.hour;
-                    int stop_hour = atoi("${scheduled_deep_sleep_stop}");
-                    int start_hour = atoi("${scheduled_deep_sleep_start}");
+                    int stop_hour = atoi("${night_deep_sleep_stop}");
+                    int start_hour = atoi("${night_deep_sleep_start}");
                     if (is_auto_timer_wakeup && (current_hour >= stop_hour && current_hour < start_hour) && id(instant_wake_switched_by_auto)) {
                         id(instant_wake_enabled) = true;
                         id(instant_wake_switched_by_auto) = false;
@@ -817,8 +817,8 @@ time:
                   auto time_now = id(sntp_time).now();
                   if (time_now.is_valid()) {
                       int h = time_now.hour;
-                      int start_hour = atoi("${scheduled_deep_sleep_start}");
-                      int stop_hour = atoi("${scheduled_deep_sleep_stop}");
+                      int start_hour = atoi("${night_deep_sleep_start}");
+                      int stop_hour = atoi("${night_deep_sleep_stop}");
                       if ((h >= start_hour || h < stop_hour) && id(instant_wake_enabled)) {
                           return true;
                       }
