@@ -14,8 +14,8 @@ substitutions:
   reboot_timeout: "0s"                                                # Wi-Fi and API reboot timeout if not connected (0s - disabled)
   deep_sleep_seconds: "120"                                           # Seconds the device goes into deep sleep after display timeout
   deep_sleep_duration: "3600"                                         # Deep sleep duration in seconds (60 min)
-  auto_deep_sleep_start: "20"                                         # Auto deep sleep start hour
-  auto_deep_sleep_stop: "6"                                           # Auto deep sleep stop hour
+  scheduled_deep_sleep_start: "20"                                    # Scheduled deep sleep start hour
+  scheduled_deep_sleep_stop: "6"                                      # Scheduled deep sleep stop hour
   
   # LVGL SETTINGS
   timezone: "Europe/Budapest"                                         # Check: https://en.wikipedia.org/wiki/List_of_tz_database_time_zones
@@ -104,8 +104,8 @@ substitutions:
   display_timeout: "Képernyő kikapcsolási ideje"                      # EN: "Display timeout"
   uptime: "Üzemidő"                                                   # EN: "Uptime"
   uptime_days_unit_of_measurement: "óra"                              # EN: "hours"
-  auto_sleep_ha: "Mélyalvás éjszaka"                                  # EN: "Night deep sleep"
-  prevent_sleep_ha: "Mélyalvás megakadályozása"                       # EN: "Prevent deep sleep"
+  instant_wake_ha: "Azonnali ébredés"                                 # EN: "Instant wake
+  scheduled_deep_sleep_ha: "Időzített mélyalvás"                      # EN: "Scheduled deep sleep"
   battery: "Akkumulátor"                                              # EN: "Battery"
   battery_charging: "Akkumulátor töltés"                              # EN: "Battery charging"
   battery_fully_charged: "Akkumulátor teljesen feltöltve"             # EN: "Battery fully charged"
@@ -131,8 +131,8 @@ substitutions:
   ds_4: "4 perc"                                                      # EN: "4 min"
   ds_5: "5 perc"                                                      # EN: "5 min"
   display_brightness: "KIJELZŐ FÉNYERŐ"                               # EN: "DISPLAY BRIGTHNESS"
-  auto_sleep: "MÉLYALVÁS ÉJSZAKA"                                     # EN: "NIGHT DEEP SLEEP"
-  prevent_sleep: "MÉLYALVÁS MEGAKADÁLYOZÁSA"                          # EN: "PREVENT DEEP SLEEP"
+  instant_wake: "AZONNALI ÉBREDÉS"                                    # EN: "INSTANT WAKE"
+  scheduled_deep_sleep: "IDŐZÍTETT MÉLYALVÁS"                         # EN: "SCHEDULED DEEP SLEEP"
   
     # INFORMATION PAGE
   tab_name_doors_and_windows: "Nyílászárók"                           # EN: "Doors and windows"
@@ -471,7 +471,7 @@ script:
       - delay: !lambda 'return atoi("${deep_sleep_seconds}") * 1000;'
       - if:
           condition:
-            lambda: 'return !id(sleep_prevent_enabled);'
+            lambda: 'return !id(instant_wake_enabled);'
           then:
             - deep_sleep.enter:
                 id: ds_control
@@ -572,7 +572,7 @@ esphome:
       - script.execute: line_burn_in_protection
       - if:
           condition:
-            lambda: 'return id(auto_deep_sleep_enabled);'
+            lambda: 'return id(scheduled_deep_sleep_enabled);'
           then:
             - lambda: |-
                 #if CONFIG_IDF_TARGET_ESP32S3
@@ -584,24 +584,24 @@ esphome:
                 auto time_now = id(sntp_time).now();
                 if (time_now.is_valid()) {
                     int current_hour = time_now.hour;
-                    int stop_hour = atoi("${auto_deep_sleep_stop}");
-                    int start_hour = atoi("${auto_deep_sleep_start}");
-                    if (is_auto_timer_wakeup && (current_hour >= stop_hour && current_hour < start_hour) && id(prevent_was_switched_by_auto)) {
-                        id(sleep_prevent_enabled) = true;
-                        id(prevent_was_switched_by_auto) = false;
+                    int stop_hour = atoi("${scheduled_deep_sleep_stop}");
+                    int start_hour = atoi("${scheduled_deep_sleep_start}");
+                    if (is_auto_timer_wakeup && (current_hour >= stop_hour && current_hour < start_hour) && id(instant_wake_switched_by_auto)) {
+                        id(instant_wake_enabled) = true;
+                        id(instant_wake_switched_by_auto) = false;
                     }
                     else if (current_hour >= start_hour || current_hour < stop_hour) {
-                        id(sleep_prevent_enabled) = false;
-                        id(prevent_was_switched_by_auto) = true;
+                        id(instant_wake_enabled) = false;
+                        id(instant_wake_switched_by_auto) = true;
                     }
                 }
       - if:
           condition:
-            lambda: 'return id(sleep_prevent_enabled);'
+            lambda: 'return id(instant_wake_enabled);'
           then:
-            - switch.turn_on: prevent_sleep_switch
+            - switch.turn_on: instant_wake_switch
           else:
-            - switch.turn_off: prevent_sleep_switch
+            - switch.turn_off: instant_wake_switch
       - delay: 1s
       - script.execute: script_delayed_sleep
 
@@ -813,20 +813,20 @@ time:
           - if:
               condition:
                 lambda: |-
-                  if (!id(auto_deep_sleep_enabled)) return false;
+                  if (!id(scheduled_deep_sleep_enabled)) return false;
                   auto time_now = id(sntp_time).now();
                   if (time_now.is_valid()) {
                       int h = time_now.hour;
-                      int start_hour = atoi("${auto_deep_sleep_start}");
-                      int stop_hour = atoi("${auto_deep_sleep_stop}");
-                      if ((h >= start_hour || h < stop_hour) && id(sleep_prevent_enabled)) {
+                      int start_hour = atoi("${scheduled_deep_sleep_start}");
+                      int stop_hour = atoi("${scheduled_deep_sleep_stop}");
+                      if ((h >= start_hour || h < stop_hour) && id(instant_wake_enabled)) {
                           return true;
                       }
                   }
                   return false;
               then:
-                - globals.set: { id: prevent_was_switched_by_auto, value: 'true' }
-                - switch.turn_off: prevent_sleep_switch
+                - globals.set: { id: instant_wake_switched_by_auto, value: 'true' }
+                - switch.turn_off: instant_wake_switch
 
 number:
   - platform: template
@@ -895,17 +895,17 @@ globals:
     type: bool
     initial_value: 'false'
 
-  - id: sleep_prevent_enabled
+  - id: instant_wake_enabled
     type: bool
     restore_value: yes
     initial_value: 'true'
 
-  - id: auto_deep_sleep_enabled
+  - id: scheduled_deep_sleep_enabled
     type: bool
     restore_value: yes
     initial_value: 'false'
 
-  - id: prevent_was_switched_by_auto
+  - id: instant_wake_switched_by_auto
     type: bool
     restore_value: yes
     initial_value: 'false'
@@ -934,49 +934,58 @@ interval:
 
 switch:
   - platform: template
-    name: "${auto_sleep_ha}"
-    id: auto_deep_sleep_switch
+    name: "${scheduled_deep_sleep}"
+    id: scheduled_deep_sleep_switch
     icon: mdi:clock-start
     optimistic: true
     restore_mode: RESTORE_DEFAULT_OFF
     on_turn_on:
       then:
-        - globals.set: { id: auto_deep_sleep_enabled, value: 'true' }
+        - globals.set: { id: scheduled_deep_sleep_enabled, value: 'true' }
         - lambda: |-
-            if (id(auto_sleep_sw_widget) != nullptr) {
-              lv_obj_add_state(id(auto_sleep_sw_widget), LV_STATE_CHECKED);
+            if (id(scheduled_deep_sleep_sw_widget) != nullptr) {
+              lv_obj_add_state(id(scheduled_deep_sleep_sw_widget), LV_STATE_CHECKED);
             }
     on_turn_off:
       then:
-        - globals.set: { id: auto_deep_sleep_enabled, value: 'false' }
+        - globals.set: { id: scheduled_deep_sleep_enabled, value: 'false' }
         - lambda: |-
-            if (id(auto_sleep_sw_widget) != nullptr) {
-              lv_obj_clear_state(id(auto_sleep_sw_widget), LV_STATE_CHECKED);
+            if (id(scheduled_deep_sleep_sw_widget) != nullptr) {
+              lv_obj_clear_state(id(scheduled_deep_sleep_sw_widget), LV_STATE_CHECKED);
             }
-        - switch.turn_on: prevent_sleep_switch
+        - if:
+            condition:
+              lambda: 'return !id(instant_wake_enabled);'
+            then:
+              - switch.turn_on: instant_wake_switch
   
   - platform: template
-    name: "${prevent_sleep_ha}"
-    id: prevent_sleep_switch
+    name: "${instant_wake}"
+    id: instant_wake_switch
     icon: mdi:power-sleep
     optimistic: true
     restore_mode: RESTORE_DEFAULT_ON
     on_turn_on:
       then:
-        - globals.set: { id: sleep_prevent_enabled, value: 'true' }
-        - globals.set: { id: prevent_was_switched_by_auto, value: 'false' }
+        - globals.set: { id: instant_wake_enabled, value: 'true' }
+        - globals.set: { id: instant_wake_switched_by_auto, value: 'false' }
         - lambda: |-
-            if (id(sleep_sw_widget) != nullptr) {
-              lv_obj_add_state(id(sleep_sw_widget), LV_STATE_CHECKED);
+            if (id(instant_wake_sw_widget) != nullptr) {
+              lv_obj_add_state(id(instant_wake_sw_widget), LV_STATE_CHECKED);
             }       
     on_turn_off:
       then:
-        - globals.set: { id: sleep_prevent_enabled, value: 'false' }
+        - globals.set: { id: instant_wake_enabled, value: 'false' }
         - script.execute: script_delayed_sleep
         - lambda: |-
-            if (id(sleep_sw_widget) != nullptr) {
-              lv_obj_clear_state(id(sleep_sw_widget), LV_STATE_CHECKED);
+            if (id(instant_wake_sw_widget) != nullptr) {
+              lv_obj_clear_state(id(instant_wake_sw_widget), LV_STATE_CHECKED);
             }
+        - if:
+            condition:
+              lambda: 'return !id(scheduled_deep_sleep_enabled);'
+            then:
+              - switch.turn_on: scheduled_deep_sleep_switch
 
   - platform: homeassistant
     id: kids_room_socket_auto_turn_off
@@ -4425,10 +4434,10 @@ lvgl:
               id: lbl_header
               text: "${icon_pwm} ${page_name_pwm}"
           - lambda: |-
-              if (id(sleep_prevent_enabled)) {
-                lv_obj_add_state(id(sleep_sw_widget), LV_STATE_CHECKED);
+              if (id(instant_wake_enabled)) {
+                lv_obj_add_state(id(instant_wake_sw_widget), LV_STATE_CHECKED);
               } else {
-                lv_obj_clear_state(id(sleep_sw_widget), LV_STATE_CHECKED);
+                lv_obj_clear_state(id(instant_wake_sw_widget), LV_STATE_CHECKED);
               }
       bg_color: color_pickled_bluewood
       widgets:
@@ -4541,15 +4550,14 @@ lvgl:
                       - globals.set:
                           id: saved_brightness
                           value: !lambda "return x;"
-
               - label:
-                  id: lbl_auto_sleep
+                  id: lbl_instant_wake
                   text_font: f_medium
                   text_color: color_whitesmoke
-                  text: "${icon_clock_start} ${auto_sleep}"
+                  text: "${icon_power_sleep} ${instant_wake}"
 
               - switch:
-                  id: auto_sleep_sw_widget
+                  id: instant_wake_sw_widget
                   bg_color: color_gray20
                   bg_grad_dir: NONE
                   bg_opa: COVER
@@ -4572,18 +4580,18 @@ lvgl:
                         condition:
                           lambda: 'return x;'
                         then:
-                          - switch.turn_on: auto_deep_sleep_switch
+                          - switch.turn_on: instant_wake_switch
                         else:
-                          - switch.turn_off: auto_deep_sleep_switch
-              
+                          - switch.turn_off: instant_wake_switch
+
               - label:
-                  id: lbl_sleep
+                  id: lbl_scheduled_deep_sleep
                   text_font: f_medium
                   text_color: color_whitesmoke
-                  text: "${icon_power_sleep} ${prevent_sleep}"
+                  text: "${icon_clock_start} ${scheduled_deep_sleep}"
 
               - switch:
-                  id: sleep_sw_widget
+                  id: scheduled_deep_sleep_sw_widget
                   bg_color: color_gray20
                   bg_grad_dir: NONE
                   bg_opa: COVER
@@ -4606,9 +4614,9 @@ lvgl:
                         condition:
                           lambda: 'return x;'
                         then:
-                          - switch.turn_on: prevent_sleep_switch
+                          - switch.turn_on: scheduled_deep_sleep_switch
                         else:
-                          - switch.turn_off: prevent_sleep_switch
+                          - switch.turn_off: scheduled_deep_sleep_switch
     
     - id: page_power
       on_load:
