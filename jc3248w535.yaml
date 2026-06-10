@@ -102,8 +102,6 @@ substitutions:
   system_restart: "Rendszer újraindítása"                             # EN: "System restart"
   wifi_signal: "Wi-Fi jel"                                            # EN: "Wi-Fi signal"
   display_timeout: "Képernyő kikapcsolási ideje"                      # EN: "Display timeout"
-  uptime: "Üzemidő"                                                   # EN: "Uptime"
-  uptime_days_unit_of_measurement: "óra"                              # EN: "hours"
   instant_wake_ha: "Azonnali ébredés"                                 # EN: "Instant wake
   scheduled_deep_sleep_ha: "Időzített mélyalvás"                      # EN: "Scheduled deep sleep"
   battery: "Akkumulátor"                                              # EN: "Battery"
@@ -1016,18 +1014,6 @@ switch:
               checked: !lambda "return x;"
 
 sensor:
-  - platform: uptime
-    id: uptime_seconds
-    internal: true
-
-  - platform: template
-    name: "${uptime}"
-    lambda: |-
-      return (id(uptime_seconds).state / 3600.0); 
-    icon: mdi:clock-outline
-    unit_of_measurement: "${uptime_days_unit_of_measurement}"
-    update_interval: 60s
-
   - platform: wifi_signal
     id: my_wifi_signal
     name: "${wifi_signal}"
@@ -1061,10 +1047,11 @@ sensor:
           id: batt_label
           text_font: f_tray_icons  
           text_color: !lambda |-
-            float current_soc = id(battery_soc_sensor).state;
-            if (!std::isnan(current_soc) && current_soc >= 100.0f) {
+            float filt_v = id(raw_battery_v).state;
+            if (!std::isnan(filt_v) && filt_v >= 4.19f) {
                 return id(color_screamin_green);
             }
+            float current_soc = id(battery_soc_sensor).state;
             if (!std::isnan(current_soc) && current_soc <= 20.0f) {
                 return id(color_red);
             }
@@ -1129,7 +1116,8 @@ sensor:
       else if (filt <= 3.79f) soc_ha = 60.0f + (filt - 3.70f) * (70.0f - 60.0f) / (3.79f - 3.70f);
       else if (filt <= 3.89f) soc_ha = 70.0f + (filt - 3.79f) * (80.0f - 70.0f) / (3.89f - 3.79f);
       else if (filt <= 3.98f) soc_ha = 80.0f + (filt - 3.79f) * (90.0f - 80.0f) / (3.98f - 3.79f);
-      else if (filt <= 4.21f) soc_ha = 90.0f + (filt - 3.98f) * (100.0f - 90.0f) / (4.21f - 3.98f);
+      else if (filt <= 4.08f) soc_ha = 80.0f + (filt - 3.98f) * (95.0f - 80.0f) / (4.08f - 3.98f);
+      else if (filt <= 4.11f) soc_ha = 95.0f + (filt - 4.08f) * (100.0f - 95.0f) / (4.11f - 4.08f);
       else soc_ha = 100.0f;
       if (soc_ha > 100.0f) return 100.0f;
       if (soc_ha < 0.0f) return 0.0f;
@@ -1575,9 +1563,9 @@ binary_sensor:
     id: battery_fully_charged_sensor
     icon: "mdi:battery-check"
     lambda: |-
-      float current_soc = id(battery_soc_sensor).state;
-      if (std::isnan(current_soc)) return {};
-      if (current_soc >= 100.0f) {
+      float filt_v = id(raw_battery_v).state;
+      if (std::isnan(filt_v)) return {};
+      if (filt_v >= 4.19f) {
           return true;
       } else {
           return false;
