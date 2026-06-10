@@ -464,6 +464,7 @@ script:
                 show_snow: false
             - light.turn_off: display_backlight
             - script.execute: delayed_wifi_off
+            - component.suspend: raw_battery_v
             - script.execute: script_cpu_save_mode
             - lambda: |-
                 id(my_touch).set_update_interval(200);
@@ -694,6 +695,7 @@ touchscreen:
                   id(my_touch).set_update_interval(30);
               - script.execute: script_cpu_perf_mode
               - script.stop: delayed_wifi_off
+              - component.resume: raw_battery_v
               - wifi.enable:
               - lvgl.resume:
               - light.turn_on: display_backlight
