@@ -684,14 +684,14 @@ light:
 touchscreen:
   - platform: axs15231
     id: my_touch
-    update_interval: 30ms
+    update_interval: 50ms
     on_release:
       then:
         - if:
             condition: lvgl.is_paused
             then:
               - lambda: |-
-                  id(my_touch).set_update_interval(30);
+                  id(my_touch).set_update_interval(50);
               - script.execute: script_cpu_perf_mode
               - script.stop: delayed_wifi_off
               - wifi.enable:
@@ -1070,7 +1070,7 @@ sensor:
             }
             return id(color_whitesmoke);
           text: !lambda |-
-            static char buf[10];             
+            static char buf[16];             
             if (millis() < 10000) {
                 snprintf(buf, sizeof(buf), "%s", "${icon_battery_unknown}");
                 return buf;
