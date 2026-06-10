@@ -934,32 +934,6 @@ interval:
 
 switch:
   - platform: template
-    name: "${scheduled_deep_sleep}"
-    id: scheduled_deep_sleep_switch
-    icon: mdi:clock-start
-    optimistic: true
-    restore_mode: RESTORE_DEFAULT_OFF
-    on_turn_on:
-      then:
-        - globals.set: { id: scheduled_deep_sleep_enabled, value: 'true' }
-        - lambda: |-
-            if (id(scheduled_deep_sleep_sw_widget) != nullptr) {
-              lv_obj_add_state(id(scheduled_deep_sleep_sw_widget), LV_STATE_CHECKED);
-            }
-    on_turn_off:
-      then:
-        - globals.set: { id: scheduled_deep_sleep_enabled, value: 'false' }
-        - lambda: |-
-            if (id(scheduled_deep_sleep_sw_widget) != nullptr) {
-              lv_obj_clear_state(id(scheduled_deep_sleep_sw_widget), LV_STATE_CHECKED);
-            }
-        - if:
-            condition:
-              lambda: 'return !id(instant_wake_enabled);'
-            then:
-              - switch.turn_on: instant_wake_switch
-  
-  - platform: template
     name: "${instant_wake}"
     id: instant_wake_switch
     icon: mdi:power-sleep
@@ -986,7 +960,33 @@ switch:
               lambda: 'return !id(scheduled_deep_sleep_enabled);'
             then:
               - switch.turn_on: scheduled_deep_sleep_switch
-
+              
+  - platform: template
+    name: "${scheduled_deep_sleep}"
+    id: scheduled_deep_sleep_switch
+    icon: mdi:clock-start
+    optimistic: true
+    restore_mode: RESTORE_DEFAULT_OFF
+    on_turn_on:
+      then:
+        - globals.set: { id: scheduled_deep_sleep_enabled, value: 'true' }
+        - lambda: |-
+            if (id(scheduled_deep_sleep_sw_widget) != nullptr) {
+              lv_obj_add_state(id(scheduled_deep_sleep_sw_widget), LV_STATE_CHECKED);
+            }
+    on_turn_off:
+      then:
+        - globals.set: { id: scheduled_deep_sleep_enabled, value: 'false' }
+        - lambda: |-
+            if (id(scheduled_deep_sleep_sw_widget) != nullptr) {
+              lv_obj_clear_state(id(scheduled_deep_sleep_sw_widget), LV_STATE_CHECKED);
+            }
+        - if:
+            condition:
+              lambda: 'return !id(instant_wake_enabled);'
+            then:
+              - switch.turn_on: instant_wake_switch
+  
   - platform: homeassistant
     id: kids_room_socket_auto_turn_off
     entity_id: automation.gyerekszoba_konnektor_automatikus_kikapcsolasa
