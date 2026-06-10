@@ -464,7 +464,6 @@ script:
                 show_snow: false
             - light.turn_off: display_backlight
             - script.execute: delayed_wifi_off
-            - component.suspend: raw_battery_v
             - script.execute: script_cpu_save_mode
             - lambda: |-
                 id(my_touch).set_update_interval(200);
@@ -695,7 +694,6 @@ touchscreen:
                   id(my_touch).set_update_interval(30);
               - script.execute: script_cpu_perf_mode
               - script.stop: delayed_wifi_off
-              - component.resume: raw_battery_v
               - wifi.enable:
               - lvgl.resume:
               - light.turn_on: display_backlight
@@ -934,7 +932,7 @@ interval:
 
 switch:
   - platform: template
-    name: "${instant_wake}"
+    name: "${instant_wake_ha}"
     id: instant_wake_switch
     icon: mdi:power-sleep
     optimistic: true
@@ -962,7 +960,7 @@ switch:
               - switch.turn_on: scheduled_deep_sleep_switch
               
   - platform: template
-    name: "${scheduled_deep_sleep}"
+    name: "${scheduled_deep_sleep_ha}"
     id: scheduled_deep_sleep_switch
     icon: mdi:clock-start
     optimistic: true
@@ -1054,19 +1052,19 @@ sensor:
     accuracy_decimals: 2
     internal: true
     filters:
-      - multiply: 1.72         
+      - multiply: 1.72
+      - exponential_moving_average:
+          alpha: 0.1
+          send_every: 1         
     on_value:
       - lvgl.label.update:
           id: batt_label
           text_font: f_tray_icons  
           text_color: !lambda |-
-            bool is_charging = id(battery_charging_sensor).state;
-            float filt_v = id(filtered_battery_v).state;
-            if (is_charging) {
-                if (filt_v >= 4.20f) return id(color_screamin_green);
-                return id(color_whitesmoke);
-            }   
             float current_soc = id(battery_soc_sensor).state;
+            if (!std::isnan(current_soc) && current_soc >= 100.0f) {
+                return id(color_screamin_green);
+            }
             if (!std::isnan(current_soc) && current_soc <= 20.0f) {
                 return id(color_red);
             }
@@ -1077,19 +1075,6 @@ sensor:
                 snprintf(buf, sizeof(buf), "%s", "${icon_battery_unknown}");
                 return buf;
             }            
-            static bool charge_lock = false;
-            bool charging_active = id(battery_charging_sensor).state;
-            float current_v = id(filtered_battery_v).state;
-            if (charging_active) {
-                charge_lock = true;
-            }
-            if (current_v < 4.00f) {
-                charge_lock = false;
-            }
-            if (charging_active || charge_lock) {
-                snprintf(buf, sizeof(buf), "%s", "${icon_power_plug_battery}");
-                return buf;
-            }
             float soc_val = id(battery_soc_sensor).state;
             if (std::isnan(soc_val)) {
                 snprintf(buf, sizeof(buf), "%s", "${icon_battery_unknown}");
@@ -1130,14 +1115,11 @@ sensor:
     accuracy_decimals: 0
     update_interval: 30s
     lambda: |-
-      if (millis() < 10000) return {}; 
-      float filt = id(filtered_battery_v).state;
-      if (id(battery_charging_sensor).state) {
-          return 100.0f; 
-      }
+      float filt = id(raw_battery_v).state;
+      if (std::isnan(filt)) return {};
       float soc_ha = 0.0f;
       if (filt <= 3.00f) soc_ha = 0.0f;
-      else if (filt <= 3.36f) soc_ha = 0.0f  + (filt - 3.00f) * (5.0f - 0.0f) / (3.36f - 3.36f);
+      else if (filt <= 3.36f) soc_ha = 0.0f  + (filt - 3.00f) * (5.0f - 0.0f) / (3.36f - 3.00f);
       else if (filt <= 3.41f) soc_ha = 5.0f  + (filt - 3.36f) * (10.0f - 5.0f) / (3.41f - 3.36f);
       else if (filt <= 3.48f) soc_ha = 10.0f + (filt - 3.41f) * (20.0f - 10.0f) / (3.48f - 3.41f);
       else if (filt <= 3.52f) soc_ha = 20.0f + (filt - 3.48f) * (30.0f - 20.0f) / (3.52f - 3.48f);
@@ -1146,8 +1128,8 @@ sensor:
       else if (filt <= 3.70f) soc_ha = 50.0f + (filt - 3.61f) * (60.0f - 50.0f) / (3.70f - 3.61f);
       else if (filt <= 3.79f) soc_ha = 60.0f + (filt - 3.70f) * (70.0f - 60.0f) / (3.79f - 3.70f);
       else if (filt <= 3.89f) soc_ha = 70.0f + (filt - 3.79f) * (80.0f - 70.0f) / (3.89f - 3.79f);
-      else if (filt <= 3.98f) soc_ha = 80.0f + (filt - 3.89f) * (90.0f - 80.0f) / (3.98f - 3.89f);
-      else if (filt <= 4.02f) soc_ha = 90.0f + (filt - 3.98f) * (100.0f - 90.0f) / (4.02f - 3.98f);
+      else if (filt <= 3.98f) soc_ha = 80.0f + (filt - 3.79f) * (90.0f - 80.0f) / (3.98f - 3.79f);
+      else if (filt <= 4.21f) soc_ha = 90.0f + (filt - 3.98f) * (100.0f - 90.0f) / (4.21f - 3.98f);
       else soc_ha = 100.0f;
       if (soc_ha > 100.0f) return 100.0f;
       if (soc_ha < 0.0f) return 0.0f;
@@ -1589,34 +1571,17 @@ sensor:
 
 binary_sensor:
   - platform: template
-    name: "${battery_charging}"
-    id: battery_charging_sensor
-    device_class: "battery_charging"
-    lambda: |-
-      if (millis() < 10000) return {}; 
-      float raw = id(raw_battery_v).state;
-      float filt = id(filtered_battery_v).state;
-      static bool ha_charging_state = false;
-      static int ha_on_b = 0; static int ha_off_b = 0;
-      if (raw > (filt + 0.08f) || raw > 4.15f) { ha_on_b++; ha_off_b = 0; }
-      else if (raw < (filt - 0.02f) && raw < 4.05f) { ha_off_b++; ha_on_b = 0; }
-      else { ha_on_b = 0; ha_off_b = 0; }
-      if (ha_on_b >= 12) ha_charging_state = true;
-      if (ha_off_b >= 10) ha_charging_state = false;
-      return ha_charging_state;
-
-  - platform: template
     name: "${battery_fully_charged}"
     id: battery_fully_charged_sensor
     icon: "mdi:battery-check"
     lambda: |-
-      if (millis() < 10000) return {};
-      float filt_v = id(filtered_battery_v).state;
-      bool is_charging = id(battery_charging_sensor).state;
-      if (is_charging && filt_v >= 4.20f) {
+      float current_soc = id(battery_soc_sensor).state;
+      if (std::isnan(current_soc)) return {};
+      if (current_soc >= 100.0f) {
           return true;
+      } else {
+          return false;
       }
-      return false;
 
   - platform: template
     id: sensor_lights
