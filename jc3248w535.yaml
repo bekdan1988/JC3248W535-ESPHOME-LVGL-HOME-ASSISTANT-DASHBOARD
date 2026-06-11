@@ -403,6 +403,7 @@ font:
           "${icon_snowflake}",
           "${icon_wifi_off}",
           "${icon_api_off}",
+          "${icon_arrow_left}",
           ]
   
   # THERMOSTAT/AIR CONDITIONER CURRENT TEMPERATURE
@@ -537,6 +538,39 @@ script:
           update_btn(id(btn_timeout_180), 180);
       - script.execute: script_delayed_sleep
 
+  - id: script_update_system_mode_label
+    mode: queued
+    then:
+      - delay: 50ms
+      - if:
+          condition:
+            and:
+              - switch.is_on: instant_wake_switch
+              - switch.is_on: scheduled_deep_sleep_switch
+          then:
+            - lvgl.label.update: { id: lbl_system_mode_status, text: "${system_mode_on_on}" }
+      - if:
+          condition:
+            and:
+              - switch.is_on: instant_wake_switch
+              - switch.is_off: scheduled_deep_sleep_switch
+          then:
+            - lvgl.label.update: { id: lbl_system_mode_status, text: "${system_mode_on_off}" }
+      - if:
+          condition:
+            and:
+              - switch.is_off: instant_wake_switch
+              - switch.is_on: scheduled_deep_sleep_switch
+          then:
+            - lvgl.label.update: { id: lbl_system_mode_status, text: "${system_mode_off_on}" }
+      - if:
+          condition:
+            and:
+              - switch.is_off: instant_wake_switch
+              - switch.is_off: scheduled_deep_sleep_switch
+          then:
+            - lvgl.label.update: { id: lbl_system_mode_status, text: "" }
+  
   - id: show_and_hide_tray
     mode: restart
     then:
@@ -589,6 +623,7 @@ esphome:
   on_boot:
     priority: -100
     then:
+      - delay: 500ms
       - light.control:
           id: display_backlight
           brightness: !lambda "return id(saved_brightness) / 100.0;"
@@ -981,7 +1016,8 @@ switch:
         - lambda: |-
             if (id(instant_wake_sw_widget) != nullptr) {
               lv_obj_add_state(id(instant_wake_sw_widget), LV_STATE_CHECKED);
-            }       
+            }
+        - script.execute: script_update_system_mode_label       
     on_turn_off:
       then:
         - globals.set: { id: instant_wake_enabled, value: 'false' }
@@ -990,6 +1026,7 @@ switch:
             if (id(instant_wake_sw_widget) != nullptr) {
               lv_obj_clear_state(id(instant_wake_sw_widget), LV_STATE_CHECKED);
             }
+        - script.execute: script_update_system_mode_label
         - if:
             condition:
               lambda: 'return !id(scheduled_deep_sleep_enabled);'
@@ -1009,6 +1046,7 @@ switch:
             if (id(scheduled_deep_sleep_sw_widget) != nullptr) {
               lv_obj_add_state(id(scheduled_deep_sleep_sw_widget), LV_STATE_CHECKED);
             }
+        - script.execute: script_update_system_mode_label
     on_turn_off:
       then:
         - globals.set: { id: scheduled_deep_sleep_enabled, value: 'false' }
@@ -1016,6 +1054,7 @@ switch:
             if (id(scheduled_deep_sleep_sw_widget) != nullptr) {
               lv_obj_clear_state(id(scheduled_deep_sleep_sw_widget), LV_STATE_CHECKED);
             }
+        - script.execute: script_update_system_mode_label
         - if:
             condition:
               lambda: 'return !id(instant_wake_enabled);'
@@ -1087,7 +1126,7 @@ sensor:
           text_font: f_tray_icons  
           text_color: !lambda |-
             float filt_v = id(raw_battery_v).state;
-            if (!std::isnan(filt_v) && filt_v >= 4.19f) {
+            if (!std::isnan(filt_v) && filt_v >= 4.20f) {
                 return id(color_screamin_green);
             }
             float current_soc = id(battery_soc_sensor).state;
@@ -1604,7 +1643,7 @@ binary_sensor:
     lambda: |-
       float filt_v = id(raw_battery_v).state;
       if (std::isnan(filt_v)) return {};
-      if (filt_v >= 4.19f) {
+      if (filt_v >= 4.20f) {
           return true;
       } else {
           return false;
@@ -2716,6 +2755,21 @@ lvgl:
       <<: *common_btn
       width: 100
       height: 100
+      text_font: f_main_menu_icons
+      shadow_width: 14
+      shadow_opa: 40%
+
+    - id: style_icon_btn_small
+      width: 100
+      height: 50
+      radius: 14
+      text_color: color_whitesmoke
+      bg_color: darkgrey
+      bg_opa: 65%
+      pad_top: 2
+      pad_bottom: 2
+      pad_left: 2
+      pad_right: 2
       text_font: f_main_menu_icons
       shadow_width: 14
       shadow_opa: 40%
@@ -4426,11 +4480,27 @@ lvgl:
               id: lbl_header
               text: "${icon_pwm} ${page_name_pwm}"
           - lambda: |-
-              if (id(instant_wake_enabled)) {
+              if (id(instant_wake_switch).state) {
                 lv_obj_add_state(id(instant_wake_sw_widget), LV_STATE_CHECKED);
               } else {
                 lv_obj_clear_state(id(instant_wake_sw_widget), LV_STATE_CHECKED);
               }
+          - lvgl.label.update:
+              id: lbl_system_mode_status
+              text: !lambda |-
+                bool wake = id(instant_wake_switch).state;
+                bool sleep = id(scheduled_deep_sleep_switch).state; 
+                if (wake && sleep) {
+                    return "${system_mode_on_on}";
+                }
+                if (wake && !sleep) {
+                    return "${system_mode_on_off}";
+                }
+                if (!wake && sleep) {
+                    return "${system_mode_off_on}";
+                }
+                return "";
+
       bg_color: color_pickled_bluewood
       widgets:
         - obj:
@@ -4447,7 +4517,7 @@ lvgl:
               - button:
                   id: btn_timeout_60
                   press_lock: false
-                  styles: style_icon_btn
+                  styles: style_icon_btn_small
                   checkable: true
                   widgets:
                       - label:
@@ -4464,7 +4534,7 @@ lvgl:
               - button:
                   id: btn_timeout_120
                   press_lock: false
-                  styles: style_icon_btn
+                  styles: style_icon_btn_small
                   checkable: true
                   widgets:
                       - label:
@@ -4481,7 +4551,7 @@ lvgl:
               - button:
                   id: btn_timeout_180
                   press_lock: false
-                  styles: style_icon_btn
+                  styles: style_icon_btn_small
                   checkable: true
                   widgets:
                       - label:
@@ -4498,7 +4568,7 @@ lvgl:
               - button:
                   id: btn_pwm_back
                   press_lock: false
-                  styles: style_icon_btn
+                  styles: style_icon_btn_small
                   widgets:
                       - label:
                           align: CENTER
@@ -4542,6 +4612,7 @@ lvgl:
                       - globals.set:
                           id: saved_brightness
                           value: !lambda "return x;"
+              
               - label:
                   id: lbl_instant_wake
                   text_font: f_medium
@@ -4575,8 +4646,7 @@ lvgl:
                           - switch.turn_on: instant_wake_switch
                         else:
                           - switch.turn_off: instant_wake_switch
-                    - lvgl.label.update:
-                        id: lbl_system_mode_status
+                    - script.execute: script_update_system_mode_label
 
               - label:
                   id: lbl_scheduled_deep_sleep
@@ -4611,27 +4681,14 @@ lvgl:
                           - switch.turn_on: scheduled_deep_sleep_switch
                         else:
                           - switch.turn_off: scheduled_deep_sleep_switch
-                    - lvgl.label.update:
-                        id: lbl_system_mode_status
+                    - script.execute: script_update_system_mode_label
 
               - label:
                   id: lbl_system_mode_status
                   text_font: f_small
                   text_color: color_whitesmoke
-                  text: !lambda |-
-                    bool wake = id(instant_wake_switch).state;
-                    bool sleep = id(scheduled_deep_sleep_switch).state;
-                    if (wake && sleep) {
-                        return "${system_mode_on_on}";
-                    } 
-                    if (wake && !sleep) {
-                        return "${system_mode_on_off}";
-                    } 
-                    if (!wake && sleep) {
-                        return "${system_mode_off_on}";
-                    }
-                    return "";
-    
+                  text: ""
+
     - id: page_power
       on_load:
         then:
