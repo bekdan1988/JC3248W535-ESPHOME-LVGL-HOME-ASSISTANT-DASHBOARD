@@ -441,12 +441,6 @@ script:
           rtc_cpu_freq_config_t cfg;
           rtc_clk_cpu_freq_mhz_to_config(240, &cfg);
           rtc_clk_cpu_freq_set_config(&cfg);
-
-  - id: delayed_wifi_off
-    mode: restart
-    then:
-      - delay: 30s
-      - wifi.disable:
   
   - id: script_delayed_sleep
     mode: restart
@@ -461,7 +455,7 @@ script:
             - lvgl.pause:
                 show_snow: false
             - light.turn_off: display_backlight
-            - script.execute: delayed_wifi_off
+            - wifi.disable:
             - script.execute: script_cpu_save_mode
             - lambda: |-
                 id(my_touch).set_update_interval(200);
@@ -691,7 +685,6 @@ touchscreen:
               - lambda: |-
                   id(my_touch).set_update_interval(50);
               - script.execute: script_cpu_perf_mode
-              - script.stop: delayed_wifi_off
               - wifi.enable:
               - lvgl.resume:
               - light.turn_on: display_backlight
@@ -846,6 +839,7 @@ number:
             - script.execute:
                 id: script_set_timeout
                 value: !lambda return x;
+            - script.execute: script_delayed_sleep
 
 button:
   - platform: shutdown
