@@ -14,8 +14,8 @@ substitutions:
   reboot_timeout: "0s"                                                # Wi-Fi and API reboot timeout if not connected (0s - disabled)
   deep_sleep_seconds: "60"                                            # Seconds the device goes into deep sleep after display timeout
   deep_sleep_duration: "3600"                                         # Deep sleep duration in seconds (60 min)
-  night_deep_sleep_start: "20"                                        # Night deep sleep start hour
-  night_deep_sleep_stop: "6"                                          # Night deep sleep stop hour
+  night_deep_sleep_start: "21:00"                                     # Night deep sleep start
+  night_deep_sleep_stop: "06:00"                                      # Night deep sleep stop
   
   # LVGL SETTINGS
   timezone: "Europe/Budapest"                                         # Check: https://en.wikipedia.org/wiki/List_of_tz_database_time_zones
@@ -70,6 +70,7 @@ substitutions:
   icon_timer: "\U000F13AB"                                            # mdi:timer
   icon_brightness: "\U000F00DF"                                       # mdi:brightness-6
   icon_power_sleep: "\U000F0904"                                      # mdi:power-sleep
+  icon_gesture_tap: "\U000F0741"                                      # mdi:gesture-tap
   icon_clock_start: "\U000F0155"                                      # mdi:clock-start
   icon_window: "\U000F05AE"                                           # mdi:window-closed
   icon_door: "\U000F081B"                                             # mdi:door-closed
@@ -131,6 +132,9 @@ substitutions:
   display_brightness: "KIJELZŐ FÉNYERŐ"                               # EN: "DISPLAY BRIGTHNESS"
   instant_wake: "AZONNALI ÉBREDÉS"                                    # EN: "INSTANT WAKE"
   scheduled_deep_sleep: "IDŐZÍTETT MÉLYALVÁS"                         # EN: "SCHEDULED DEEP SLEEP"
+  system_mode_on_on: "Hibernálás: 06:00-20:00 | Mélyalvás: 20:00-06:00 | Ébredés: óránként" #EN: "Hibernation: 06:00-20:00 | Deep Sleep: 20:00-06:00 | Wakeup: Hourly"
+  system_mode_on_off: "Hibernálás: 00:00-24:00 | Mélyalvás: ki"       # EN: "Hibernation: 00:00-24:00 | Deep Sleep: Off"
+  system_mode_off_on: "Hibernálás: ki | Mélyalvás: 00:00-24:00 | Ébredés: óránként" # EN: "Hibernation: Off | Deep Sleep: 00:00-24:00 | Wakeup: Hourly"
   
     # INFORMATION PAGE
   tab_name_doors_and_windows: "Nyílászárók"                           # EN: "Doors and windows"
@@ -393,6 +397,7 @@ font:
           "${icon_brightness}",
           "${icon_timer}",
           "${icon_power_sleep}",
+          "${icon_gesture_tap}",
           "${icon_clock_start}",
           "${icon_heat}",
           "${icon_snowflake}",
@@ -467,11 +472,26 @@ script:
             - deep_sleep.enter:
                 id: ds_control
                 sleep_duration: !lambda |-
-                  int total_awake_seconds = id(timeout_value) + atoi("${deep_sleep_seconds}");
+                  auto time = id(sntp_time).now();
                   int base_sleep_seconds = atoi("${deep_sleep_duration}"); 
-                  int corrected_seconds = base_sleep_seconds - total_awake_seconds;
-                  if (corrected_seconds < 1) { corrected_seconds = 1; } 
-                  return corrected_seconds * 1000;
+                  if (!time.is_valid()) {
+                      int total_awake_seconds = id(timeout_value) + atoi("${deep_sleep_seconds}");
+                      int corrected_seconds = base_sleep_seconds - total_awake_seconds;
+                      if (corrected_seconds < 1) { corrected_seconds = 1; } 
+                      return corrected_seconds * 1000;
+                  }
+                  int seconds_since_midnight = (time.hour * 3600) + (time.minute * 60) + time.second;
+                  std::string stop_str = "${night_deep_sleep_stop}";
+                  int start_hour = std::stoi(stop_str.substr(0, 2));
+                  int start_minute = std::stoi(stop_str.substr(3, 2));
+                  int start_line_seconds = (start_hour * 3600) + (start_minute * 60);
+                  int seconds_since_start_line = seconds_since_midnight - start_line_seconds;
+                  if (seconds_since_start_line < 0) {
+                      seconds_since_start_line += 86400;
+                  }
+                  int seconds_to_next_align_point = base_sleep_seconds - (seconds_since_start_line % base_sleep_seconds);
+                  if (seconds_to_next_align_point < 10) { seconds_to_next_align_point = base_sleep_seconds; }           
+                  return seconds_to_next_align_point * 1000;
 
   - id: script_set_timeout
     parameters:
@@ -926,7 +946,7 @@ switch:
   - platform: template
     name: "${instant_wake_ha}"
     id: instant_wake_switch
-    icon: mdi:power-sleep
+    icon: mdi:gesture-tap
     optimistic: true
     restore_mode: RESTORE_DEFAULT_ON
     on_turn_on:
@@ -4501,7 +4521,7 @@ lvgl:
                   id: lbl_instant_wake
                   text_font: f_medium
                   text_color: color_whitesmoke
-                  text: "${icon_power_sleep} ${instant_wake}"
+                  text: "${icon_gesture_tap} ${instant_wake}"
 
               - switch:
                   id: instant_wake_sw_widget
@@ -4530,6 +4550,8 @@ lvgl:
                           - switch.turn_on: instant_wake_switch
                         else:
                           - switch.turn_off: instant_wake_switch
+                    - lvgl.label.update:
+                        id: lbl_system_mode_status
 
               - label:
                   id: lbl_scheduled_deep_sleep
@@ -4564,6 +4586,26 @@ lvgl:
                           - switch.turn_on: scheduled_deep_sleep_switch
                         else:
                           - switch.turn_off: scheduled_deep_sleep_switch
+                    - lvgl.label.update:
+                        id: lbl_system_mode_status
+
+              - label:
+                  id: lbl_system_mode_status
+                  text_font: f_small
+                  text_color: color_whitesmoke
+                  text: !lambda |-
+                    bool wake = id(instant_wake_switch).state;
+                    bool sleep = id(scheduled_deep_sleep_switch).state;
+                    if (wake && sleep) {
+                        return "${system_mode_on_on}";
+                    } 
+                    if (wake && !sleep) {
+                        return "${system_mode_on_off}";
+                    } 
+                    if (!wake && sleep) {
+                        return "${system_mode_off_on}";
+                    }
+                    return "";
     
     - id: page_power
       on_load:
