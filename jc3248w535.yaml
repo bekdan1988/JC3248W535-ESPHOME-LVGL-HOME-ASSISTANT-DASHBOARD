@@ -467,7 +467,19 @@ script:
       - delay: !lambda 'return atoi("${deep_sleep_seconds}") * 1000;'
       - if:
           condition:
-            lambda: 'return !id(instant_wake_enabled);'
+            lambda: |-
+              auto time = id(sntp_time).now();
+              if (time.is_valid()) {
+                  int current_secs = (time.hour * 3600) + (time.minute * 60) + time.second;
+                  std::string stop_str = "${night_deep_sleep_stop}";
+                  int stop_hour = std::stoi(stop_str.substr(0, 2));
+                  int stop_min = std::stoi(stop_str.substr(3, 2));
+                  int stop_line_secs = (stop_hour * 3600) + (stop_min * 60);
+                  if (current_secs >= (stop_line_secs - 600) && current_secs < stop_line_secs) {
+                      return false; 
+                  }
+              }
+              return !id(instant_wake_enabled);
           then:
             - deep_sleep.enter:
                 id: ds_control
