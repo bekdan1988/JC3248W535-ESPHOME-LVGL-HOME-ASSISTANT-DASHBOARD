@@ -1033,7 +1033,7 @@ sensor:
   - platform: adc
     pin: 5
     id: raw_battery_v
-    update_interval: 1s
+    update_interval: 5s
     attenuation: 12db
     accuracy_decimals: 2
     internal: true
@@ -1058,7 +1058,7 @@ sensor:
             return id(color_whitesmoke);
           text: !lambda |-
             static char buf[16];             
-            if (millis() < 10000) {
+            if (millis() < 15000) {
                 snprintf(buf, sizeof(buf), "%s", "${icon_battery_unknown}");
                 return buf;
             }            
@@ -1100,7 +1100,7 @@ sensor:
     device_class: "battery"
     unit_of_measurement: "%"
     accuracy_decimals: 0
-    update_interval: 30s
+    update_interval: 60s
     lambda: |-
       float filt = id(raw_battery_v).state;
       if (std::isnan(filt)) return {};
