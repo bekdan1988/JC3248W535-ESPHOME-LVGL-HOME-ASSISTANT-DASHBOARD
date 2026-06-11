@@ -464,6 +464,15 @@ script:
             - script.execute: script_cpu_save_mode
             - lambda: |-
                 id(my_touch).set_update_interval(200);
+                auto *touch = id(my_touch);
+                if (touch != nullptr) {
+                }
+                esp_sleep_pd_config(ESP_PD_DOMAIN_VDDSDIO, ESP_PD_OPTION_OFF);
+                gpio_deep_sleep_hold_en();
+                auto disp = lv_disp_get_default();
+                if (disp != nullptr) {
+                    lv_disp_trig_activity(disp); 
+                }
       - delay: !lambda 'return atoi("${deep_sleep_seconds}") * 1000;'
       - if:
           condition:
@@ -715,7 +724,11 @@ touchscreen:
             condition: lvgl.is_paused
             then:
               - lambda: |-
+                  gpio_deep_sleep_hold_dis();
                   id(my_touch).set_update_interval(50);
+                  auto *touch = id(my_touch);
+                  if (touch != nullptr) {
+                  }
               - script.execute: script_cpu_perf_mode
               - wifi.enable:
               - lvgl.resume:
@@ -815,7 +828,7 @@ wifi:
               lvgl.is_paused:
           then:
             - lvgl.page.show: page_no_wifi_connection
-
+  
 time:
   - platform: sntp
     id: sntp_time
