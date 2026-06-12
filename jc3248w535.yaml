@@ -1121,25 +1121,33 @@ sensor:
 
   - platform: adc
     pin: 5
-    id: raw_battery_v
+    id: battery_percentage
     update_interval: 60s
     attenuation: 12db
-    accuracy_decimals: 2
+    accuracy_decimals: 0
     internal: true
     filters:
       - multiply: 1.72
       - exponential_moving_average:
-          alpha: 0.1         
+          alpha: 0.1
+      - calibrate_linear:
+          method: exact
+          datapoints:
+            - 3.00 ->   0.0
+            - 3.35 ->  12.0
+            - 3.40 ->  20.0
+            - 3.60 ->  60.0
+            - 4.00 ->  90.0
+            - 4.10 -> 100.0         
     on_value:
       - lvgl.label.update:
           id: batt_label
           text_font: f_tray_icons  
           text_color: !lambda |-
-            float filt_v = id(raw_battery_v).state;
-            if (!std::isnan(filt_v) && filt_v >= 4.20f) {
+            float current_soc = id(battery_percentage).state;
+            if (!std::isnan(current_soc) && current_soc >= 98.0f) {
                 return id(color_screamin_green);
             }
-            float current_soc = id(battery_soc_sensor).state;
             if (!std::isnan(current_soc) && current_soc <= 20.0f) {
                 return id(color_red);
             }
@@ -1150,7 +1158,7 @@ sensor:
                 snprintf(buf, sizeof(buf), "%s", "${icon_battery_unknown}");
                 return buf;
             }            
-            float soc_val = id(battery_soc_sensor).state;
+            float soc_val = id(battery_percentage).state;
             if (std::isnan(soc_val)) {
                 snprintf(buf, sizeof(buf), "%s", "${icon_battery_unknown}");
                 return buf;
@@ -1172,16 +1180,6 @@ sensor:
             return buf;
 
   - platform: template
-    id: filtered_battery_v
-    update_interval: 60s
-    internal: true
-    filters:
-      - sliding_window_moving_average:
-          window_size: 30
-    lambda: |-
-      return id(raw_battery_v).state;
-
-  - platform: template
     name: "${battery}"
     id: battery_soc_sensor
     device_class: "battery"
@@ -1189,25 +1187,7 @@ sensor:
     accuracy_decimals: 0
     update_interval: 60s
     lambda: |-
-      float filt = id(raw_battery_v).state;
-      if (std::isnan(filt)) return {};
-      float soc_ha = 0.0f;
-      if (filt <= 3.00f) soc_ha = 0.0f;
-      else if (filt <= 3.36f) soc_ha = 0.0f  + (filt - 3.00f) * (5.0f - 0.0f) / (3.36f - 3.00f);
-      else if (filt <= 3.41f) soc_ha = 5.0f  + (filt - 3.36f) * (10.0f - 5.0f) / (3.41f - 3.36f);
-      else if (filt <= 3.48f) soc_ha = 10.0f + (filt - 3.41f) * (20.0f - 10.0f) / (3.48f - 3.41f);
-      else if (filt <= 3.52f) soc_ha = 20.0f + (filt - 3.48f) * (30.0f - 20.0f) / (3.52f - 3.48f);
-      else if (filt <= 3.56f) soc_ha = 30.0f + (filt - 3.52f) * (40.0f - 30.0f) / (3.56f - 3.52f);
-      else if (filt <= 3.61f) soc_ha = 40.0f + (filt - 3.56f) * (50.0f - 40.0f) / (3.61f - 3.56f);
-      else if (filt <= 3.70f) soc_ha = 50.0f + (filt - 3.61f) * (60.0f - 50.0f) / (3.70f - 3.61f);
-      else if (filt <= 3.79f) soc_ha = 60.0f + (filt - 3.70f) * (70.0f - 60.0f) / (3.79f - 3.70f);
-      else if (filt <= 3.89f) soc_ha = 70.0f + (filt - 3.79f) * (80.0f - 70.0f) / (3.89f - 3.79f);
-      else if (filt <= 3.98f) soc_ha = 80.0f + (filt - 3.89f) * (90.0f - 80.0f) / (3.98f - 3.89f);
-      else if (filt <= 4.11f) soc_ha = 90.0f + (filt - 3.98f) * (100.0f - 90.0f) / (4.11f - 3.98f); 
-      else soc_ha = 100.0f;
-      if (soc_ha > 100.0f) return 100.0f;
-      if (soc_ha < 0.0f) return 0.0f;
-      return soc_ha;
+      return id(battery_percentage).state;
 
   - platform: homeassistant
     id: thermostat_current_temp
@@ -1649,7 +1629,7 @@ binary_sensor:
     id: battery_fully_charged_sensor
     icon: "mdi:battery-check"
     lambda: |-
-      float filt_v = id(raw_battery_v).state;
+      float filt_v = id(battery_percentage).state;
       if (std::isnan(filt_v)) return {};
       if (filt_v >= 4.20f) {
           return true;
