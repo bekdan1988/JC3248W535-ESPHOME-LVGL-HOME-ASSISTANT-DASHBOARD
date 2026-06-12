@@ -467,8 +467,11 @@ script:
                 auto *touch = id(my_touch);
                 if (touch != nullptr) {
                 }
+                #if CONFIG_IDF_TARGET_ESP32S3
+                esp_sleep_pd_config(ESP_PD_DOMAIN_RTC_PERIPH, ESP_PD_OPTION_OFF);                
                 esp_sleep_pd_config(ESP_PD_DOMAIN_VDDSDIO, ESP_PD_OPTION_OFF);
                 gpio_deep_sleep_hold_en();
+                #endif 
                 auto disp = lv_disp_get_default();
                 if (disp != nullptr) {
                     lv_disp_trig_activity(disp); 
@@ -683,7 +686,13 @@ esp32:
       CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ_240: y
       CONFIG_ESP_TASK_WDT_TIMEOUT_S: "60"
       CONFIG_ESP_INT_WDT_TIMEOUT_MS: "1000"
+      CONFIG_ESP_WIFI_IRAM_OPT: y
+      CONFIG_ESP_WIFI_RX_IRAM_OPT: y
+      CONFIG_ESP_WIFI_SLP_BEACON_LOST_OPT: y
+      CONFIG_ESP_WIFI_SLP_IRAM_OPT: y
       CONFIG_ESP32_BROWNOUT_DET_LVL: "0"
+      CONFIG_FREERTOS_HZ: "1000"
+      CONFIG_FREERTOS_USE_TICKLESS_IDLE: y
       CONFIG_LV_ATTRIBUTE_FAST_MEM: n
       CONFIG_LV_ATTRIBUTE_MEM_ALIGN: "4"
       CONFIG_LV_DRAW_BUF_ALIGN: "64"
@@ -694,6 +703,9 @@ esp32:
       CONFIG_LV_MEM_CUSTOM: y
       CONFIG_LV_MEM_ADR: "0x0"
       CONFIG_LV_VDB_SIZE: "60"
+      CONFIG_LWIP_ESP_GRATUITOUS_ARP: y
+      CONFIG_PM_ENABLE: y
+      CONFIG_PM_DFS_INIT_DATA_IN_FLASH: y
       CONFIG_SPIRAM_FETCH_INSTRUCTIONS: y
       CONFIG_SPIRAM_MALLOC_RESERVE_INTERNAL: "32768"
       CONFIG_SPIRAM_MALLOC_ALWAYSINTERNAL: "4096"
@@ -835,7 +847,7 @@ network:
 
 wifi:
   fast_connect: true
-  power_save_mode: none
+  power_save_mode: LIGHT
   reboot_timeout: "${reboot_timeout}"
   ssid: "${wifi_ssid}"
   password: "${wifi_password}"
@@ -1094,7 +1106,7 @@ sensor:
   - platform: wifi_signal
     id: my_wifi_signal
     name: "${wifi_signal}"
-    update_interval: 30s
+    update_interval: 60s
     unit_of_measurement: "%"
     filters:
       - lambda: return min(max(2 * (x + 100.0), 0.0), 100.0);
@@ -1103,22 +1115,21 @@ sensor:
         - lvgl.label.update:
             id: lbl_wifi_icon
             text: !lambda |-
-              if (x > -50) return "${icon_wifi_strong}"; // Strong
-              if (x > -70) return "${icon_wifi_medium}"; // Medium
-              return "${icon_wifi_weak}";                // Weak
+              if (x >= 67.0f) return "${icon_wifi_strong}";
+              if (x >= 34.0f) return "${icon_wifi_medium}";
+              return "${icon_wifi_weak}";
 
   - platform: adc
     pin: 5
     id: raw_battery_v
-    update_interval: 5s
+    update_interval: 60s
     attenuation: 12db
     accuracy_decimals: 2
     internal: true
     filters:
       - multiply: 1.72
       - exponential_moving_average:
-          alpha: 0.1
-          send_every: 1         
+          alpha: 0.1         
     on_value:
       - lvgl.label.update:
           id: batt_label
@@ -1162,12 +1173,11 @@ sensor:
 
   - platform: template
     id: filtered_battery_v
-    update_interval: 1s
+    update_interval: 60s
     internal: true
     filters:
       - sliding_window_moving_average:
           window_size: 30
-          send_every: 1
     lambda: |-
       return id(raw_battery_v).state;
 
@@ -1192,9 +1202,8 @@ sensor:
       else if (filt <= 3.70f) soc_ha = 50.0f + (filt - 3.61f) * (60.0f - 50.0f) / (3.70f - 3.61f);
       else if (filt <= 3.79f) soc_ha = 60.0f + (filt - 3.70f) * (70.0f - 60.0f) / (3.79f - 3.70f);
       else if (filt <= 3.89f) soc_ha = 70.0f + (filt - 3.79f) * (80.0f - 70.0f) / (3.89f - 3.79f);
-      else if (filt <= 3.98f) soc_ha = 80.0f + (filt - 3.79f) * (90.0f - 80.0f) / (3.98f - 3.79f);
-      else if (filt <= 4.08f) soc_ha = 80.0f + (filt - 3.98f) * (95.0f - 80.0f) / (4.08f - 3.98f);
-      else if (filt <= 4.11f) soc_ha = 95.0f + (filt - 4.08f) * (100.0f - 95.0f) / (4.11f - 4.08f);
+      else if (filt <= 3.98f) soc_ha = 80.0f + (filt - 3.89f) * (90.0f - 80.0f) / (3.98f - 3.89f);
+      else if (filt <= 4.11f) soc_ha = 90.0f + (filt - 3.98f) * (100.0f - 90.0f) / (4.11f - 3.98f); 
       else soc_ha = 100.0f;
       if (soc_ha > 100.0f) return 100.0f;
       if (soc_ha < 0.0f) return 0.0f;
