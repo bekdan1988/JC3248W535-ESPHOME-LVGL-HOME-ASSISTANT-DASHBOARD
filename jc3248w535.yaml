@@ -429,11 +429,15 @@ script:
     mode: restart
     then:
       - lambda: |-
-          rtc_cpu_freq_config_t cfg;
-          rtc_clk_cpu_freq_mhz_to_config(80, &cfg);
-          rtc_clk_cpu_freq_set_config(&cfg);          
           #if CONFIG_IDF_TARGET_ESP32S3
           esp_sleep_pd_config(ESP_PD_DOMAIN_XTAL, ESP_PD_OPTION_OFF);
+          static esp_pm_lock_handle_t perf_lock = nullptr;
+          if (perf_lock == nullptr) {
+              esp_pm_lock_create(ESP_PM_CPU_FREQ_MAX, 0, "perf_cpu", &perf_lock);
+          }
+          if (perf_lock != nullptr) {
+              esp_pm_lock_release(perf_lock);
+          }
           #endif
 
   - id: script_cpu_perf_mode
@@ -442,10 +446,14 @@ script:
       - lambda: |-
           #if CONFIG_IDF_TARGET_ESP32S3
           esp_sleep_pd_config(ESP_PD_DOMAIN_XTAL, ESP_PD_OPTION_ON);
-          #endif          
-          rtc_cpu_freq_config_t cfg;
-          rtc_clk_cpu_freq_mhz_to_config(240, &cfg);
-          rtc_clk_cpu_freq_set_config(&cfg);
+          static esp_pm_lock_handle_t perf_lock = nullptr;
+          if (perf_lock == nullptr) {
+              esp_pm_lock_create(ESP_PM_CPU_FREQ_MAX, 0, "perf_cpu", &perf_lock);
+          }
+          if (perf_lock != nullptr) {
+              esp_pm_lock_acquire(perf_lock);
+          }
+          #endif
   
   - id: script_delayed_sleep
     mode: restart
