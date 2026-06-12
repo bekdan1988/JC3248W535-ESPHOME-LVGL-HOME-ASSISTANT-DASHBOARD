@@ -132,7 +132,7 @@ substitutions:
   display_brightness: "KIJELZŐ FÉNYERŐ"                               # EN: "DISPLAY BRIGTHNESS"
   instant_wake: "AZONNALI ÉBREDÉS"                                    # EN: "INSTANT WAKE"
   scheduled_deep_sleep: "IDŐZÍTETT MÉLYALVÁS"                         # EN: "SCHEDULED DEEP SLEEP"
-  system_mode_on_on: "Hibernálás: 06:00-21:00 | Mélyalvás: ${night_deep_sleep_start}-${night_deep_sleep_stop} | Ébredés: óránként" # EN: "Hibernation: 06:00-20:00 | Deep Sleep: ${night_deep_sleep_start}-${night_deep_sleep_stop} | Wakeup: Hourly"
+  system_mode_on_on: "Hibernálás: 06:00-21:00 | Mélyalvás: ${night_deep_sleep_start}-${night_deep_sleep_stop} | Ébredés: ${night_deep_sleep_stop}" # EN: "Hibernation: 06:00-20:00 | Deep Sleep: ${night_deep_sleep_start}-${night_deep_sleep_stop} | Wakeup: ${night_deep_sleep_stop}"
   system_mode_on_off: "Hibernálás: 00:00-24:00 | Mélyalvás: ki"       # EN: "Hibernation: 00:00-24:00 | Deep Sleep: Off"
   system_mode_off_on: "Hibernálás: ki | Mélyalvás: 00:00-24:00 | Ébredés: óránként" # EN: "Hibernation: Off | Deep Sleep: 00:00-24:00 | Wakeup: Hourly"
   
