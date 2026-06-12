@@ -429,15 +429,11 @@ script:
     mode: restart
     then:
       - lambda: |-
+          rtc_cpu_freq_config_t cfg;
+          rtc_clk_cpu_freq_mhz_to_config(80, &cfg);
+          rtc_clk_cpu_freq_set_config(&cfg);          
           #if CONFIG_IDF_TARGET_ESP32S3
           esp_sleep_pd_config(ESP_PD_DOMAIN_XTAL, ESP_PD_OPTION_OFF);
-          static esp_pm_lock_handle_t perf_lock = nullptr;
-          if (perf_lock == nullptr) {
-              esp_pm_lock_create(ESP_PM_CPU_FREQ_MAX, 0, "perf_cpu", &perf_lock);
-          }
-          if (perf_lock != nullptr) {
-              esp_pm_lock_release(perf_lock);
-          }
           #endif
 
   - id: script_cpu_perf_mode
@@ -446,14 +442,10 @@ script:
       - lambda: |-
           #if CONFIG_IDF_TARGET_ESP32S3
           esp_sleep_pd_config(ESP_PD_DOMAIN_XTAL, ESP_PD_OPTION_ON);
-          static esp_pm_lock_handle_t perf_lock = nullptr;
-          if (perf_lock == nullptr) {
-              esp_pm_lock_create(ESP_PM_CPU_FREQ_MAX, 0, "perf_cpu", &perf_lock);
-          }
-          if (perf_lock != nullptr) {
-              esp_pm_lock_acquire(perf_lock);
-          }
-          #endif
+          #endif          
+          rtc_cpu_freq_config_t cfg;
+          rtc_clk_cpu_freq_mhz_to_config(240, &cfg);
+          rtc_clk_cpu_freq_set_config(&cfg);
   
   - id: script_delayed_sleep
     mode: restart
@@ -699,8 +691,6 @@ esp32:
       CONFIG_ESP_WIFI_SLP_BEACON_LOST_OPT: y
       CONFIG_ESP_WIFI_SLP_IRAM_OPT: y
       CONFIG_ESP32_BROWNOUT_DET_LVL: "0"
-      CONFIG_FREERTOS_HZ: "1000"
-      CONFIG_FREERTOS_USE_TICKLESS_IDLE: y
       CONFIG_LV_ATTRIBUTE_FAST_MEM: n
       CONFIG_LV_ATTRIBUTE_MEM_ALIGN: "4"
       CONFIG_LV_DRAW_BUF_ALIGN: "64"
@@ -712,8 +702,6 @@ esp32:
       CONFIG_LV_MEM_ADR: "0x0"
       CONFIG_LV_VDB_SIZE: "60"
       CONFIG_LWIP_ESP_GRATUITOUS_ARP: y
-      CONFIG_PM_ENABLE: y
-      CONFIG_PM_DFS_INIT_DATA_IN_FLASH: y
       CONFIG_SPIRAM_FETCH_INSTRUCTIONS: y
       CONFIG_SPIRAM_MALLOC_RESERVE_INTERNAL: "32768"
       CONFIG_SPIRAM_MALLOC_ALWAYSINTERNAL: "4096"
