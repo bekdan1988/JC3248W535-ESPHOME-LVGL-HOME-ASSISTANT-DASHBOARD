@@ -811,7 +811,6 @@ touchscreen:
 
 deep_sleep:
   id: ds_control
-  sleep_duration: "${deep_sleep_duration}s"
 
 api:
   encryption:
@@ -911,16 +910,14 @@ time:
                   int h = time_now.hour;
                   int start_hour = atoi("${night_deep_sleep_start}");
                   int stop_hour = atoi("${night_deep_sleep_stop}");
+                  
                   if (h >= start_hour || h < stop_hour) {
                       id(is_night_time) = true;
                   } else {
                       id(is_night_time) = false;
                   }
                   if (id(is_night_time) && id(scheduled_deep_sleep_enabled)) {
-                      id(instant_wake_enabled) = false;
-                      id(instant_wake_switched_by_auto) = true;
-                      
-                      id(ds_control).begin_sleep();
+                      id(script_delayed_sleep).execute();
                   }
               }
 
