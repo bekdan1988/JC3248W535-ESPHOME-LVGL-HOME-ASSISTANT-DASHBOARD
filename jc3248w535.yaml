@@ -867,7 +867,8 @@ network:
 
 wifi:
   fast_connect: true
-  power_save_mode: LIGHT
+  power_save_mode: light
+  output_power: 8.5dBm
   reboot_timeout: "${reboot_timeout}"
   ssid: "${wifi_ssid}"
   password: "${wifi_password}"
@@ -899,6 +900,7 @@ time:
   - platform: sntp
     id: sntp_time
     timezone: "${timezone}"
+    update_interval: 24h
     on_time_sync:
       then:
         - lvgl.label.update:
