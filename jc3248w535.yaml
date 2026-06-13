@@ -926,12 +926,13 @@ time:
                   int h = time_now.hour;
                   int start_hour = atoi("${quiet_hours_start}");
                   int stop_hour = atoi("${quiet_hours_end}");
+                  bool old_quiet_status = id(is_quiet_hours);
                   if (h >= start_hour || h < stop_hour) {
                       id(is_quiet_hours) = true;
                   } else {
                       id(is_quiet_hours) = false;
                   }
-                  if (id(is_quiet_hours) && id(scheduled_deep_sleep_enabled)) {
+                  if (id(is_quiet_hours) && !old_quiet_status && id(scheduled_deep_sleep_enabled)) {
                       id(script_delayed_sleep).execute();
                   }
               }
