@@ -14,8 +14,8 @@ substitutions:
   reboot_timeout: "0s"                                                # Wi-Fi and API reboot timeout if not connected (0s - disabled)
   deep_sleep_seconds: "60"                                            # Seconds the device goes into deep sleep after display timeout
   deep_sleep_duration: "3600"                                         # Deep sleep duration in seconds (60 min)
-  quiet_hours_start: "20:00"                                          # Start of quiet hours
-  quiet_hours_end: "16:30"                                            # End of quiet hours
+  quiet_hours_start: "22:00"                                          # Start of quiet hours
+  quiet_hours_end: "06:00"                                            # End of quiet hours
   
   # LVGL SETTINGS
   timezone: "Europe/Budapest"                                         # Check: https://en.wikipedia.org/wiki/List_of_tz_database_time_zones
@@ -706,9 +706,12 @@ esp32:
       CONFIG_ESP_WIFI_RX_IRAM_OPT: y
       CONFIG_ESP_WIFI_SLP_BEACON_LOST_OPT: y
       CONFIG_ESP_WIFI_SLP_IRAM_OPT: y
+      CONFIG_ESP_WIFI_STATIC_RX_BUFFER_NUM: "8"
       CONFIG_ESP32_BROWNOUT_DET_LVL: "0"
       CONFIG_FREERTOS_HZ: "1000"
       CONFIG_FREERTOS_USE_TICKLESS_IDLE: y
+      CONFIG_LOG_COLORS: n
+      CONFIG_LOG_TIMESTAMP_SOURCE_SYSTEM: y
       CONFIG_LV_ATTRIBUTE_FAST_MEM: n
       CONFIG_LV_ATTRIBUTE_MEM_ALIGN: "4"
       CONFIG_LV_DRAW_BUF_ALIGN: "64"
@@ -720,6 +723,7 @@ esp32:
       CONFIG_LV_MEM_ADR: "0x0"
       CONFIG_LV_VDB_SIZE: "60"
       CONFIG_LWIP_ESP_GRATUITOUS_ARP: y
+      CONFIG_MBEDTLS_EXTERNAL_MEM_ALLOC: y
       CONFIG_SPIRAM_FETCH_INSTRUCTIONS: y
       CONFIG_SPIRAM_MALLOC_RESERVE_INTERNAL: "32768"
       CONFIG_SPIRAM_MALLOC_ALWAYSINTERNAL: "4096"
@@ -727,6 +731,9 @@ esp32:
       CONFIG_SPIRAM_RODATA: y
       CONFIG_SPIRAM_SPEED_120M: y
       CONFIG_SPIRAM_TRY_ALLOCATE_FIRST_FROM_INTERNAL: y
+      CONFIG_SPIRAM_TRY_ALLOCATE_WIFI_LWIP: y
+      CONFIG_SPI_FLASH_ROM_IMPL: y
+      CONFIG_TOUCH_ELEMENT_MEM_LOCATION_INTERNAL: y
   flash_size: 16MB
 
 logger:
