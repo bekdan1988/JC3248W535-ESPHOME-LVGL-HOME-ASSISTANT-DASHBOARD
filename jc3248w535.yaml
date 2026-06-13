@@ -107,7 +107,6 @@ substitutions:
   scheduled_deep_sleep_ha: "Időzített mélyalvás"                      # EN: "Scheduled deep sleep"
   battery: "Akkumulátor"                                              # EN: "Battery"
   battery_charging: "Akkumulátor töltés"                              # EN: "Battery charging"
-  battery_fully_charged: "Akkumulátor teljesen feltöltve"             # EN: "Battery fully charged"
   
     # MAIN MENU
   page_name_home: "KEZDŐLAP"                                          # EN: "HOME"
@@ -1690,22 +1689,6 @@ sensor:
             return {buf};
 
 binary_sensor:
-  - platform: template
-    name: "${battery_fully_charged}"
-    id: battery_fully_charged_sensor
-    icon: "mdi:battery-check"
-    lambda: |-
-      float current_soc = id(battery_soc_sensor).state;
-      if (std::isnan(current_soc)) {
-          return false;
-      }
-      int soc = (int)std::lround(current_soc);
-      if (soc >= 100) {
-          return true;
-      } else {
-          return false;
-      }
-
   - platform: template
     id: sensor_lights
     lambda: |-
