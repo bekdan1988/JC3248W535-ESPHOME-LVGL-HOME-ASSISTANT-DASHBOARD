@@ -431,18 +431,12 @@ script:
       - lambda: |-
           rtc_cpu_freq_config_t cfg;
           rtc_clk_cpu_freq_mhz_to_config(80, &cfg);
-          rtc_clk_cpu_freq_set_config(&cfg);          
-          #if CONFIG_IDF_TARGET_ESP32S3
-          esp_sleep_pd_config(ESP_PD_DOMAIN_XTAL, ESP_PD_OPTION_OFF);
-          #endif
+          rtc_clk_cpu_freq_set_config(&cfg);
 
   - id: script_cpu_perf_mode
     mode: restart
     then:
       - lambda: |-
-          #if CONFIG_IDF_TARGET_ESP32S3
-          esp_sleep_pd_config(ESP_PD_DOMAIN_XTAL, ESP_PD_OPTION_ON);
-          #endif          
           rtc_cpu_freq_config_t cfg;
           rtc_clk_cpu_freq_mhz_to_config(240, &cfg);
           rtc_clk_cpu_freq_set_config(&cfg);
@@ -476,7 +470,6 @@ script:
                 if (disp != nullptr) {
                     lv_disp_trig_activity(disp); 
                 }
-      - delay: !lambda 'return atoi("${deep_sleep_seconds}") * 1000;'
       - if:
           condition:
             lambda: |-
@@ -491,8 +484,9 @@ script:
                       return false; 
                   }
               }
-              return !id(instant_wake_enabled);
+              return id(scheduled_deep_sleep_enabled) && id(is_quiet_hours);
           then:
+            - delay: !lambda 'return atoi("${deep_sleep_seconds}") * 1000;'
             - deep_sleep.enter:
                 id: ds_control
                 sleep_duration: !lambda |-
