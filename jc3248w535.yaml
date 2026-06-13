@@ -14,7 +14,7 @@ substitutions:
   reboot_timeout: "0s"                                                # Wi-Fi and API reboot timeout if not connected (0s - disabled)
   deep_sleep_seconds: "60"                                            # Seconds the device goes into deep sleep after display timeout
   deep_sleep_duration: "3600"                                         # Deep sleep duration in seconds (60 min)
-  quiet_hours_start: "22:00"                                          # Start of quiet hours
+  quiet_hours_start: "20:00"                                          # Start of quiet hours
   quiet_hours_end: "06:00"                                            # End of quiet hours
   
   # LVGL SETTINGS
@@ -904,6 +904,18 @@ time:
           - lvgl.label.update:
               id: lbl_clock
               text: !lambda return id(sntp_time).now().strftime("${clock_time_format}");
+          - lambda: |-
+              auto time_now = id(sntp_time).now();
+              if (time_now.is_valid()) {
+                  int h = time_now.hour;
+                  int start_hour = atoi("${quiet_hours_start}");
+                  int stop_hour = atoi("${quiet_hours_end}");
+                  if (h >= start_hour || h < stop_hour) {
+                      id(is_quiet_hours) = true;
+                  } else {
+                      id(is_quiet_hours) = false;
+                  }
+              }
           - if:
               condition:
                 lambda: |-
@@ -911,25 +923,11 @@ time:
               then:
                 - globals.set: { id: instant_wake_switched_by_auto, value: 'true' }
                 - switch.turn_off: instant_wake_switch
-      - minutes: /30
-        seconds: 0
-        then:
-          - lambda: |-
-              auto time_now = id(sntp_time).now();
-              if (time_now.is_valid()) {
-                  int h = time_now.hour;
-                  int start_hour = atoi("${quiet_hours_start}");
-                  int stop_hour = atoi("${quiet_hours_end}");
-                  bool old_quiet_status = id(is_quiet_hours);
-                  if (h >= start_hour || h < stop_hour) {
-                      id(is_quiet_hours) = true;
-                  } else {
-                      id(is_quiet_hours) = false;
-                  }
-                  if (id(is_quiet_hours) && !old_quiet_status && id(scheduled_deep_sleep_enabled)) {
-                      id(script_delayed_sleep).execute();
-                  }
-              }
+                - wifi.disable:
+                - light.turn_off: display_backlight
+                - lvgl.pause: { show_snow: false }
+                - script.execute: script_cpu_save_mode
+                - script.execute: script_delayed_sleep
 
 number:
   - platform: template
@@ -1233,7 +1231,7 @@ sensor:
             - 3.40 ->  20.0
             - 3.60 ->  60.0
             - 4.00 ->  90.0
-            - 4.03 -> 100.0         
+            - 4.20 -> 100.0         
       - sliding_window_moving_average:
           window_size: 15
           send_every: 1
