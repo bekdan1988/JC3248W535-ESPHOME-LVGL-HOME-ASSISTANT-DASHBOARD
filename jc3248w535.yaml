@@ -1023,47 +1023,51 @@ interval:
   - interval: 60s
     id: battery_interval_trigger
     then:
-      - lvgl.label.update:
-          id: batt_label
-          text_font: f_tray_icons  
-          text_color: !lambda |-
-            float current_soc = id(battery_percentage).state;
-            if (std::isnan(current_soc)) {
-                return id(color_whitesmoke);
-            }
-            if (current_soc >= 100.0f) {
-                return id(color_screamin_green);
-            }
-            if (current_soc <= 20.0f) {
-                return id(color_red);
-            }
-            return id(color_whitesmoke);
-          text: !lambda |-
-            static char buf[16];             
-            if (millis() < 6000) {
-                snprintf(buf, sizeof(buf), "%s", "${icon_battery_unknown}");
-                return buf;
-            }            
-            float soc_val = id(battery_percentage).state;
-            if (std::isnan(soc_val)) {
-                snprintf(buf, sizeof(buf), "%s", "${icon_battery_unknown}");
-                return buf;
-            }            
-            int soc = (int)std::lround(soc_val);
-            std::string icon;            
-            if (soc >= 100)     icon = "${icon_battery_full}";
-            else if (soc >= 90) icon = "${icon_battery_90}";
-            else if (soc >= 80) icon = "${icon_battery_80}";
-            else if (soc >= 70) icon = "${icon_battery_70}";
-            else if (soc >= 60) icon = "${icon_battery_60}";
-            else if (soc >= 50) icon = "${icon_battery_50}";
-            else if (soc >= 40) icon = "${icon_battery_40}";
-            else if (soc >= 30) icon = "${icon_battery_30}";
-            else if (soc >= 20) icon = "${icon_battery_20}";
-            else if (soc >= 10) icon = "${icon_battery_10}";
-            else                icon = "${icon_battery_outline}";
-            snprintf(buf, sizeof(buf), "%s", icon.c_str());
-            return buf;
+      - if:
+          condition:
+            lambda: 'return id(display_backlight).remote_values.is_on();'
+          then:
+            - lvgl.label.update:
+                id: batt_label
+                text_font: f_tray_icons  
+                text_color: !lambda |-
+                  float current_soc = id(battery_percentage).state;
+                  if (std::isnan(current_soc)) {
+                      return id(color_whitesmoke);
+                  }
+                  if (current_soc >= 100.0f) {
+                      return id(color_screamin_green);
+                  }
+                  if (current_soc <= 20.0f) {
+                      return id(color_red);
+                  }
+                  return id(color_whitesmoke);
+                text: !lambda |-
+                  static char buf[16];             
+                  if (millis() < 6000) {
+                      snprintf(buf, sizeof(buf), "%s", "${icon_battery_unknown}");
+                      return buf;
+                  }            
+                  float soc_val = id(battery_percentage).state;
+                  if (std::isnan(soc_val)) {
+                      snprintf(buf, sizeof(buf), "%s", "${icon_battery_unknown}");
+                      return buf;
+                  }            
+                  int soc = (int)std::lround(soc_val);
+                  std::string icon;            
+                  if (soc >= 100)     icon = "${icon_battery_full}";
+                  else if (soc >= 90) icon = "${icon_battery_90}";
+                  else if (soc >= 80) icon = "${icon_battery_80}";
+                  else if (soc >= 70) icon = "${icon_battery_70}";
+                  else if (soc >= 60) icon = "${icon_battery_60}";
+                  else if (soc >= 50) icon = "${icon_battery_50}";
+                  else if (soc >= 40) icon = "${icon_battery_40}";
+                  else if (soc >= 30) icon = "${icon_battery_30}";
+                  else if (soc >= 20) icon = "${icon_battery_20}";
+                  else if (soc >= 10) icon = "${icon_battery_10}";
+                  else                icon = "${icon_battery_outline}";
+                  snprintf(buf, sizeof(buf), "%s", icon.c_str());
+                  return buf;
 
   - interval: "${camera_update_interval}"
     then:
