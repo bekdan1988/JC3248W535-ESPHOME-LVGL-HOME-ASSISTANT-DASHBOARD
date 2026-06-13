@@ -14,8 +14,8 @@ substitutions:
   reboot_timeout: "0s"                                                # Wi-Fi and API reboot timeout if not connected (0s - disabled)
   deep_sleep_seconds: "60"                                            # Seconds the device goes into deep sleep after display timeout
   deep_sleep_duration: "3600"                                         # Deep sleep duration in seconds (60 min)
-  quiet_hours_start: "20:00"                                     # Night deep sleep start
-  quiet_hours_stop: "06:00"                                      # Night deep sleep stop
+  quiet_hours_start: "20:00"                                          # Start of quiet hours
+  quiet_hours_end: "16:30"                                            # End of quiet hours
   
   # LVGL SETTINGS
   timezone: "Europe/Budapest"                                         # Check: https://en.wikipedia.org/wiki/List_of_tz_database_time_zones
@@ -132,7 +132,7 @@ substitutions:
   display_brightness: "KIJELZŐ FÉNYERŐ"                               # EN: "DISPLAY BRIGTHNESS"
   instant_wake: "AZONNALI ÉBREDÉS"                                    # EN: "INSTANT WAKE"
   scheduled_deep_sleep: "IDŐZÍTETT MÉLYALVÁS"                         # EN: "SCHEDULED DEEP SLEEP"
-  system_mode_on_on: "Hibernálás: 06:00-20:00 | Mélyalvás: ${quiet_hours_start}-${quiet_hours_stop} | Ébredés: ${quiet_hours_stop}" # EN: "Hibernation: 06:00-20:00 | Deep Sleep: ${quiet_hours_start}-${quiet_hours_stop} | Wakeup: ${quiet_hours_stop}"
+  system_mode_on_on: "Hibernálás: 06:00-20:00 | Mélyalvás: ${quiet_hours_start}-${quiet_hours_end} | Ébredés: ${quiet_hours_end}" # EN: "Hibernation: 06:00-20:00 | Deep Sleep: ${quiet_hours_start}-${quiet_hours_end} | Wakeup: ${quiet_hours_end}"
   system_mode_on_off: "Hibernálás: 00:00-24:00 | Mélyalvás: ki"       # EN: "Hibernation: 00:00-24:00 | Deep Sleep: Off"
   system_mode_off_on: "Hibernálás: ki | Mélyalvás: 00:00-24:00 | Ébredés: óránként" # EN: "Hibernation: Off | Deep Sleep: 00:00-24:00 | Wakeup: Hourly"
   
@@ -483,7 +483,7 @@ script:
               auto time = id(sntp_time).now();
               if (time.is_valid()) {
                   int current_secs = (time.hour * 3600) + (time.minute * 60) + time.second;
-                  std::string stop_str = "${quiet_hours_stop}";
+                  std::string stop_str = "${quiet_hours_end}";
                   int stop_hour = std::stoi(stop_str.substr(0, 2));
                   int stop_min = std::stoi(stop_str.substr(3, 2));
                   int stop_line_secs = (stop_hour * 3600) + (stop_min * 60);
@@ -505,7 +505,7 @@ script:
                       return corrected_seconds * 1000;
                   }   
                   int seconds_since_midnight = (time.hour * 3600) + (time.minute * 60) + time.second;
-                  std::string stop_str = "${quiet_hours_stop}";
+                  std::string stop_str = "${quiet_hours_end}";
                   int start_hour = std::stoi(stop_str.substr(0, 2));
                   int start_minute = std::stoi(stop_str.substr(3, 2));
                   int start_line_seconds = (start_hour * 3600) + (start_minute * 60);
@@ -662,7 +662,7 @@ esphome:
                 auto time_now = id(sntp_time).now();
                 if (time_now.is_valid()) {
                     int current_hour = time_now.hour;
-                    int stop_hour = atoi("${quiet_hours_stop}");
+                    int stop_hour = atoi("${quiet_hours_end}");
                     int start_hour = atoi("${quiet_hours_start}");
                     if (current_hour >= start_hour || current_hour < stop_hour) {
                         id(is_quiet_hours) = true;
@@ -918,7 +918,7 @@ time:
               if (time_now.is_valid()) {
                   int h = time_now.hour;
                   int start_hour = atoi("${quiet_hours_start}");
-                  int stop_hour = atoi("${quiet_hours_stop}");
+                  int stop_hour = atoi("${quiet_hours_end}");
                   if (h >= start_hour || h < stop_hour) {
                       id(is_quiet_hours) = true;
                   } else {
@@ -1134,7 +1134,7 @@ switch:
             if (time_now.is_valid()) {
                 int h = time_now.hour;
                 int start_hour = atoi("${quiet_hours_start}");
-                int stop_hour = atoi("${quiet_hours_stop}");
+                int stop_hour = atoi("${quiet_hours_end}");
                 if (h >= start_hour || h < stop_hour) {
                     id(is_quiet_hours) = true;
                 } else {
