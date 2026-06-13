@@ -30,9 +30,9 @@ substitutions:
   # LVGL UI ICONS
   icon_home: "\uF015"                                                 # Font Awesome Home icon (Home button)
   icon_down_arrow: "\uF078"                                           # Font Awesome Down arrow (Dropdowns)
-  icon_wifi_strong: "\U000F05A9"                                      # mdi:wifi-strength-4
-  icon_wifi_medium: "\U000F05A1"                                      # mdi:wifi-strength-1
-  icon_wifi_weak: "\U000F05AB"                                        # mdi:wifi-strength-off
+  icon_wifi_strong: "\U000F0928"                                      # mdi:wifi-strength-4
+  icon_wifi_medium: "\U000F0922"                                      # mdi:wifi-strength-2
+  icon_wifi_weak: "\U000F092F"                                        # mdi:wifi-strength-outline
   icon_api: "\U000F109B"                                              # mdi:api
   icon_power_plug_battery: "\U000F1C3B"                               # mdi:power-plug-battery
   icon_battery_10: "\U000F007A"                                       # mdi-battery-10
@@ -706,7 +706,6 @@ esp32:
       CONFIG_ESP_WIFI_RX_IRAM_OPT: y
       CONFIG_ESP_WIFI_SLP_BEACON_LOST_OPT: y
       CONFIG_ESP_WIFI_SLP_IRAM_OPT: y
-      CONFIG_ESP_WIFI_STATIC_RX_BUFFER_NUM: "8"
       CONFIG_ESP32_BROWNOUT_DET_LVL: "0"
       CONFIG_FREERTOS_HZ: "1000"
       CONFIG_FREERTOS_USE_TICKLESS_IDLE: y
@@ -732,7 +731,6 @@ esp32:
       CONFIG_SPIRAM_SPEED_120M: y
       CONFIG_SPIRAM_TRY_ALLOCATE_FIRST_FROM_INTERNAL: y
       CONFIG_SPIRAM_TRY_ALLOCATE_WIFI_LWIP: y
-      CONFIG_SPI_FLASH_ROM_IMPL: y
       CONFIG_TOUCH_ELEMENT_MEM_LOCATION_INTERNAL: y
   flash_size: 16MB
 
@@ -868,7 +866,7 @@ network:
 wifi:
   fast_connect: true
   power_save_mode: light
-  output_power: 8.5dBm
+  output_power: 8.5dB
   reboot_timeout: "${reboot_timeout}"
   ssid: "${wifi_ssid}"
   password: "${wifi_password}"
