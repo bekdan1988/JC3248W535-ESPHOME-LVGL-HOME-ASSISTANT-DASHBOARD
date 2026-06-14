@@ -13,9 +13,6 @@ substitutions:
   logger_http_request: "ERROR"                                        # Check log levels: https://esphome.io/components/logger/#log-levels
   reboot_timeout: "0s"                                                # Wi-Fi and API reboot timeout if not connected (0s - disabled)
   deep_sleep_seconds: "60"                                            # Seconds the device goes into deep sleep after display timeout
-  deep_sleep_duration: "3600"                                         # Deep sleep duration in seconds (60 min)
-  quiet_hours_start: "20:00"                                          # Start of quiet hours
-  quiet_hours_end: "06:00"                                            # End of quiet hours
   
   # LVGL SETTINGS
   timezone: "Europe/Budapest"                                         # Check: https://en.wikipedia.org/wiki/List_of_tz_database_time_zones
@@ -105,8 +102,12 @@ substitutions:
   display_timeout: "Képernyő kikapcsolási ideje"                      # EN: "Display timeout"
   instant_wake_ha: "Azonnali ébredés"                                 # EN: "Instant wake
   scheduled_deep_sleep_ha: "Időzített mélyalvás"                      # EN: "Scheduled deep sleep"
+  wakeup_ha: "Ébredés"                                                # EN: "Wakeup"
+  quiet_hours_start_ha: "Csendes órák kezdete"                        # EN: "Quiet hours start"
+  quiet_hours_end_ha: "Csendes órák vége"                             # EN: "Quiet hours end"
+  hour: "óra"                                                         # EN: "hour(s)
+  minute: "perc"                                                      # EN: "minutes(s)
   battery: "Akkumulátor"                                              # EN: "Battery"
-  battery_charging: "Akkumulátor töltés"                              # EN: "Battery charging"
   
     # MAIN MENU
   page_name_home: "KEZDŐLAP"                                          # EN: "HOME"
@@ -131,9 +132,11 @@ substitutions:
   display_brightness: "KIJELZŐ FÉNYERŐ"                               # EN: "DISPLAY BRIGTHNESS"
   instant_wake: "AZONNALI ÉBREDÉS"                                    # EN: "INSTANT WAKE"
   scheduled_deep_sleep: "IDŐZÍTETT MÉLYALVÁS"                         # EN: "SCHEDULED DEEP SLEEP"
-  system_mode_on_on: "Hibernálás: 06:00-20:00 | Mélyalvás: ${quiet_hours_start}-${quiet_hours_end} | Ébredés: ${quiet_hours_end}" # EN: "Hibernation: 06:00-20:00 | Deep Sleep: ${quiet_hours_start}-${quiet_hours_end} | Wakeup: ${quiet_hours_end}"
-  system_mode_on_off: "Hibernálás: 00:00-24:00 | Mélyalvás: ki"       # EN: "Hibernation: 00:00-24:00 | Deep Sleep: Off"
-  system_mode_off_on: "Hibernálás: ki | Mélyalvás: 00:00-24:00 | Ébredés: óránként" # EN: "Hibernation: Off | Deep Sleep: 00:00-24:00 | Wakeup: Hourly"
+  hibernation: "Hibernálás: "                                         # EN: "Hibernation: "
+  deep_sleep: "Mélyalvás: "                                           # EN: "Deep sleep: "
+  wakeup: "Ébredés: "                                                 # EN: "Wakeup: "
+  system_mode_error: "Nincs aktív üzemmód kiválasztva!"               # EN: "No active operating mode selected!"
+  txt_24h: "24 óra"                                                   # EN: "24 hours"
   
     # INFORMATION PAGE
   tab_name_doors_and_windows: "Nyílászárók"                           # EN: "Doors and windows"
@@ -232,8 +235,9 @@ substitutions:
   shutdown: "LEÁLLÍTÁS"                                               # EN: "SHUTTING DOWN"
   restart: "ÚJRAINDÍTÁS"                                              # EN: "RESTARTING"
   no_wifi_connection: "Nincs Wi-Fi kapcsolat!"                        # EN: "No Wi-Fi connection!"
-  no_api_connection: "Nincs API kapcsolat!"                           # EN: "No API connection!""
+  no_api_connection: "Nincs API kapcsolat!"                           # EN: "No API connection!"
   unknown: "Ismeretlen"                                               # EN: "Unknown"
+  txt_off: "Ki"                                                       # EN: "Off"
 
 # COLORS
 color:
@@ -440,6 +444,11 @@ script:
           rtc_clk_cpu_freq_mhz_to_config(240, &cfg);
           rtc_clk_cpu_freq_set_config(&cfg);
   
+  - id: script_switch_cooldown
+    mode: restart
+    then:
+      - delay: 1s
+  
   - id: script_delayed_sleep
     mode: restart
     then:
@@ -472,42 +481,28 @@ script:
       - if:
           condition:
             lambda: |-
-              auto time = id(sntp_time).now();
-              if (time.is_valid()) {
-                  int current_secs = (time.hour * 3600) + (time.minute * 60) + time.second;
-                  std::string stop_str = "${quiet_hours_end}";
-                  int stop_hour = std::stoi(stop_str.substr(0, 2));
-                  int stop_min = std::stoi(stop_str.substr(3, 2));
-                  int stop_line_secs = (stop_hour * 3600) + (stop_min * 60);
-                  if (current_secs >= (stop_line_secs - 600) && current_secs < stop_line_secs) {
-                      return false; 
-                  }
-              }
-              return id(scheduled_deep_sleep_enabled) && id(is_quiet_hours);
+              return id(scheduled_deep_sleep_enabled) && (id(is_quiet_hours) || !id(instant_wake_enabled));
           then:
             - delay: !lambda 'return atoi("${deep_sleep_seconds}") * 1000;'
             - deep_sleep.enter:
                 id: ds_control
                 sleep_duration: !lambda |-
                   auto time = id(sntp_time).now();
-                  int base_sleep_seconds = atoi("${deep_sleep_duration}"); 
+                  int base_sleep_seconds = id(dyn_deep_sleep_duration_min) * 60; 
                   if (!time.is_valid()) {
                       int total_awake_seconds = id(timeout_value) + atoi("${deep_sleep_seconds}");
                       int corrected_seconds = base_sleep_seconds - total_awake_seconds;
                       if (corrected_seconds < 1) { corrected_seconds = 1; } 
                       return corrected_seconds * 1000;
-                  }   
+                  }     
                   int seconds_since_midnight = (time.hour * 3600) + (time.minute * 60) + time.second;
-                  std::string stop_str = "${quiet_hours_end}";
-                  int start_hour = std::stoi(stop_str.substr(0, 2));
-                  int start_minute = std::stoi(stop_str.substr(3, 2));
-                  int start_line_seconds = (start_hour * 3600) + (start_minute * 60);
-
+                  int start_line_seconds = (id(dyn_quiet_hours_end_slot) * 15) * 60;
                   if (id(is_quiet_hours)) {
                       int seconds_until_morning = start_line_seconds - seconds_since_midnight;
                       if (seconds_until_morning < 0) {
                           seconds_until_morning += 86400;
                       }
+                      seconds_until_morning -= atoi("${deep_sleep_seconds}");
                       if (seconds_until_morning < 10) { seconds_until_morning = base_sleep_seconds; }
                       return seconds_until_morning * 1000;
                   }
@@ -552,28 +547,83 @@ script:
               - switch.is_on: instant_wake_switch
               - switch.is_on: scheduled_deep_sleep_switch
           then:
-            - lvgl.label.update: { id: lbl_system_mode_status, text: "${system_mode_on_on}" }
+            - lvgl.label.update:
+                id: lbl_system_mode_status
+                text: !lambda |-
+                  int total_minutes = id(dyn_deep_sleep_duration_min);
+                  int hours = total_minutes / 60;
+                  int minutes = total_minutes % 60;
+                  char duration_buf[64];
+                  if (hours == 0) {
+                      sprintf(duration_buf, "%d %s", minutes, "${minute}");
+                  } else if (minutes == 0) {
+                      sprintf(duration_buf, "%d %s", hours, "${hour}");
+                  } else {
+                      sprintf(duration_buf, "%d %s %d %s", hours, "${hour}", minutes, "${minute}");
+                  }
+                  char buf[256];
+                  sprintf(buf, "%s%s-%s | %s%s | %s%s-%s", 
+                          "${hibernation}", id(txt_ha_quiet_hours_end).state.c_str(), id(txt_ha_quiet_hours_start).state.c_str(),
+                          "${wakeup}", duration_buf, "${deep_sleep}",
+                          id(txt_ha_quiet_hours_start).state.c_str(), id(txt_ha_quiet_hours_end).state.c_str());
+                  return std::string(buf);
       - if:
           condition:
             and:
               - switch.is_on: instant_wake_switch
               - switch.is_off: scheduled_deep_sleep_switch
           then:
-            - lvgl.label.update: { id: lbl_system_mode_status, text: "${system_mode_on_off}" }
+            - lvgl.label.update:
+                id: lbl_system_mode_status
+                text: !lambda |-
+                  int total_minutes = id(dyn_deep_sleep_duration_min);
+                  int hours = total_minutes / 60;
+                  int minutes = total_minutes % 60;
+                  char duration_buf[64];
+                  if (hours == 0) {
+                      sprintf(duration_buf, "%d %s", minutes, "${minute}");
+                  } else if (minutes == 0) {
+                      sprintf(duration_buf, "%d %s", hours, "${hour}");
+                  } else {
+                      sprintf(duration_buf, "%d %s %d %s", hours, "${hour}", minutes, "${minute}");
+                  }
+                  char buf[256];
+                  sprintf(buf, "%s%s | %s%s | %s%s", 
+                          "${hibernation}", "${txt_24h}", "${wakeup}", duration_buf, "${deep_sleep}", "${txt_off}");
+                  return std::string(buf);
       - if:
           condition:
             and:
               - switch.is_off: instant_wake_switch
               - switch.is_on: scheduled_deep_sleep_switch
           then:
-            - lvgl.label.update: { id: lbl_system_mode_status, text: "${system_mode_off_on}" }
+            - lvgl.label.update:
+                id: lbl_system_mode_status
+                text: !lambda |-
+                  int total_minutes = id(dyn_deep_sleep_duration_min);
+                  int hours = total_minutes / 60;
+                  int minutes = total_minutes % 60;
+                  char duration_buf[64];
+                  if (hours == 0) {
+                      sprintf(duration_buf, "%d %s", minutes, "${minute}");
+                  } else if (minutes == 0) {
+                      sprintf(duration_buf, "%d %s", hours, "${hour}");
+                  } else {
+                      sprintf(duration_buf, "%d %s %d %s", hours, "${hour}", minutes, "${minute}");
+                  }
+                  char buf[256];
+                  sprintf(buf, "%s%s | %s%s | %s%s", 
+                          "${hibernation}", "${txt_off}", "${deep_sleep}", "${txt_24h}", "${wakeup}", duration_buf);
+                  return std::string(buf);
       - if:
           condition:
             and:
               - switch.is_off: instant_wake_switch
               - switch.is_off: scheduled_deep_sleep_switch
           then:
-            - lvgl.label.update: { id: lbl_system_mode_status, text: "" }
+            - lvgl.label.update: 
+                id: lbl_system_mode_status 
+                text: "${system_mode_error}"
   
   - id: show_and_hide_tray
     mode: restart
@@ -641,43 +691,6 @@ esphome:
           id: script_set_timeout
           value: !lambda 'return id(timeout_value);'
       - script.execute: line_burn_in_protection
-      - if:
-          condition:
-            lambda: 'return id(scheduled_deep_sleep_enabled);'
-          then:
-            - lambda: |-
-                #if CONFIG_IDF_TARGET_ESP32S3
-                esp_sleep_wakeup_cause_t wakeup_reason = esp_sleep_get_wakeup_cause();
-                bool is_auto_timer_wakeup = (wakeup_reason == ESP_SLEEP_WAKEUP_TIMER);
-                #else
-                bool is_auto_timer_wakeup = true; 
-                #endif
-                auto time_now = id(sntp_time).now();
-                if (time_now.is_valid()) {
-                    int current_hour = time_now.hour;
-                    int stop_hour = atoi("${quiet_hours_end}");
-                    int start_hour = atoi("${quiet_hours_start}");
-                    if (current_hour >= start_hour || current_hour < stop_hour) {
-                        id(is_quiet_hours) = true;
-                    } else {
-                        id(is_quiet_hours) = false;
-                    }
-                    if (is_auto_timer_wakeup && (current_hour >= stop_hour && current_hour < start_hour) && id(instant_wake_switched_by_auto)) {
-                        id(instant_wake_enabled) = true;
-                        id(instant_wake_switched_by_auto) = false;
-                    }
-                    else if (current_hour >= start_hour || current_hour < stop_hour) {
-                        id(instant_wake_enabled) = false;
-                        id(instant_wake_switched_by_auto) = true;
-                    }
-                }
-      - if:
-          condition:
-            lambda: 'return id(instant_wake_enabled);'
-          then:
-            - switch.turn_on: instant_wake_switch
-          else:
-            - switch.turn_off: instant_wake_switch
       - delay: 1s
       - script.execute: script_delayed_sleep
       - delay: 5s
@@ -894,9 +907,52 @@ time:
     update_interval: 24h
     on_time_sync:
       then:
+        - lambda: |-
+            id(dyn_deep_sleep_duration_min) = (int)id(ha_deep_sleep_duration).state;
+            id(dyn_quiet_hours_start_slot) = (int)id(ha_quiet_hours_start_slot).state;
+            id(dyn_quiet_hours_end_slot) = (int)id(ha_quiet_hours_end_slot).state;
+        - component.update: txt_wakeup
+        - component.update: txt_ha_quiet_hours_start
+        - component.update: txt_ha_quiet_hours_end
+        - script.execute: script_update_system_mode_label
         - lvgl.label.update:
             id: lbl_clock
             text: !lambda return id(sntp_time).now().strftime("${clock_time_format}");
+        - if:
+            condition:
+              lambda: 'return id(scheduled_deep_sleep_enabled);'
+            then:
+              - lambda: |-
+                  #if CONFIG_IDF_TARGET_ESP32S3
+                  esp_sleep_wakeup_cause_t wakeup_reason = esp_sleep_get_wakeup_cause();
+                  bool is_auto_timer_wakeup = (wakeup_reason == ESP_SLEEP_WAKEUP_TIMER);
+                  #else
+                  bool is_auto_timer_wakeup = true; 
+                  #endif
+                  auto time_now = id(sntp_time).now();
+                  int current_minutes = (time_now.hour * 60) + time_now.minute;
+                  int start_total_min = id(dyn_quiet_hours_start_slot) * 15;
+                  int stop_total_min = id(dyn_quiet_hours_end_slot) * 15;
+                  bool quiet_now = false;
+                  if (start_total_min > stop_total_min) {
+                      quiet_now = (current_minutes >= start_total_min || current_minutes < stop_total_min);
+                  } else {
+                      quiet_now = (current_minutes >= start_total_min && current_minutes < stop_total_min);
+                  }
+                  if (is_auto_timer_wakeup && !quiet_now && id(instant_wake_switched_by_auto)) {
+                      id(instant_wake_enabled) = true;
+                      id(instant_wake_switched_by_auto) = false;
+                      auto *sw = id(instant_wake_switch);
+                      if (sw != nullptr) sw->publish_state(true);
+                  }
+                  else if (quiet_now) {
+                      id(instant_wake_enabled) = false;
+                      id(instant_wake_switched_by_auto) = true;
+                      auto *sw = id(instant_wake_switch);
+                      if (sw != nullptr) sw->publish_state(false);
+                  }
+                  else {
+                  }
     on_time:
       - seconds: 0
         then:
@@ -906,13 +962,21 @@ time:
           - lambda: |-
               auto time_now = id(sntp_time).now();
               if (time_now.is_valid()) {
-                  int h = time_now.hour;
-                  int start_hour = atoi("${quiet_hours_start}");
-                  int stop_hour = atoi("${quiet_hours_end}");
-                  if (h >= start_hour || h < stop_hour) {
-                      id(is_quiet_hours) = true;
+                  int current_minutes = (time_now.hour * 60) + time_now.minute;
+                  int start_total_min = id(dyn_quiet_hours_start_slot) * 15;
+                  int stop_total_min = id(dyn_quiet_hours_end_slot) * 15;
+                  if (start_total_min > stop_total_min) {
+                      if (current_minutes >= start_total_min || current_minutes < stop_total_min) {
+                          id(is_quiet_hours) = true;
+                      } else {
+                          id(is_quiet_hours) = false;
+                      }
                   } else {
-                      id(is_quiet_hours) = false;
+                      if (current_minutes >= start_total_min && current_minutes < stop_total_min) {
+                          id(is_quiet_hours) = true;
+                      } else {
+                          id(is_quiet_hours) = false;
+                        }
                   }
               }
           - if:
@@ -921,14 +985,100 @@ time:
                   return id(scheduled_deep_sleep_enabled) && id(is_quiet_hours) && id(instant_wake_enabled);
               then:
                 - globals.set: { id: instant_wake_switched_by_auto, value: 'true' }
-                - switch.turn_off: instant_wake_switch
+                - lambda: |-
+                    auto *sw = id(instant_wake_switch);
+                    if (sw != nullptr) sw->publish_state(false);
                 - wifi.disable:
                 - light.turn_off: display_backlight
                 - lvgl.pause: { show_snow: false }
                 - script.execute: script_cpu_save_mode
-                - script.execute: script_delayed_sleep
+                - deep_sleep.enter:
+                    id: ds_control
+                    sleep_duration: !lambda |-
+                      auto time = id(sntp_time).now();
+                      int base_sleep_seconds = id(dyn_deep_sleep_duration_min) * 60; 
+                      if (!time.is_valid()) {
+                          int total_awake_seconds = id(timeout_value) + atoi("${deep_sleep_seconds}");
+                          int corrected_seconds = base_sleep_seconds - total_awake_seconds;
+                          if (corrected_seconds < 1) { corrected_seconds = 1; } 
+                          return corrected_seconds * 1000;
+                      }     
+                      int seconds_since_midnight = (time.hour * 3600) + (time.minute * 60) + time.second;
+                      int start_line_seconds = (id(dyn_quiet_hours_end_slot) * 15) * 60; 
+                      int seconds_until_morning = start_line_seconds - seconds_since_midnight;
+                      if (seconds_until_morning < 0) {
+                          seconds_until_morning += 86400;
+                      }
+                      if (seconds_until_morning < 10) { seconds_until_morning = base_sleep_seconds; }
+                      return seconds_until_morning * 1000;
 
 number:
+  - platform: template
+    name: "${wakeup_ha}"
+    id: ha_deep_sleep_duration
+    optimistic: true
+    restore_value: true
+    initial_value: 15
+    min_value: 15
+    max_value: 1425
+    step: 15
+    icon: mdi:sleep
+    on_value:
+      then:
+        - lambda: 'id(dyn_deep_sleep_duration_min) = (int)x;'
+        - component.update: txt_wakeup
+        - script.execute: script_update_system_mode_label
+
+  - platform: template
+    name: "${quiet_hours_start_ha}"
+    id: ha_quiet_hours_start_slot
+    optimistic: true
+    restore_value: true
+    initial_value: 80
+    min_value: 0
+    max_value: 95
+    step: 1
+    icon: mdi:clock-start
+    on_value:
+      then:
+        - lambda: |-
+            int current_start = (int)x;
+            id(dyn_quiet_hours_start_slot) = current_start;
+            if (current_start == id(dyn_quiet_hours_end_slot)) {
+                int new_end = (current_start + 1) % 96;
+                id(dyn_quiet_hours_end_slot) = new_end;
+                auto *num_end = id(ha_quiet_hours_end_slot);
+                if (num_end != nullptr) num_end->publish_state(new_end);
+            }
+        - component.update: txt_ha_quiet_hours_start
+        - component.update: txt_ha_quiet_hours_end
+        - script.execute: script_update_system_mode_label
+
+  - platform: template
+    name: "${quiet_hours_end_ha}"
+    id: ha_quiet_hours_end_slot
+    optimistic: true
+    restore_value: true
+    initial_value: 24
+    min_value: 0
+    max_value: 95
+    step: 1
+    icon: mdi:clock-end
+    on_value:
+      then:
+        - lambda: |-
+            int current_end = (int)x;
+            id(dyn_quiet_hours_end_slot) = current_end;
+            if (current_end == id(dyn_quiet_hours_start_slot)) {
+                int forced_end = (id(dyn_quiet_hours_start_slot) + 1) % 96;
+                id(dyn_quiet_hours_end_slot) = forced_end;
+                auto *num_end = id(ha_quiet_hours_end_slot);
+                if (num_end != nullptr) num_end->publish_state(forced_end);
+            }
+        - component.update: txt_ha_quiet_hours_start
+        - component.update: txt_ha_quiet_hours_end
+        - script.execute: script_update_system_mode_label
+
   - platform: template
     name: "${display_timeout}"
     id: display_timeout
@@ -1016,6 +1166,23 @@ globals:
     restore_value: no
     initial_value: "false"
 
+  - id: saved_battery_soc
+    type: int
+    restore_value: yes
+    initial_value: "100"
+
+  - id: dyn_deep_sleep_duration_min
+    type: int
+    initial_value: '60'
+
+  - id: dyn_quiet_hours_start_slot
+    type: int
+    initial_value: '80'
+
+  - id: dyn_quiet_hours_end_slot
+    type: int
+    initial_value: '24'
+
 interval:
   - interval: 60s
     id: battery_interval_trigger
@@ -1096,27 +1263,47 @@ switch:
     restore_mode: RESTORE_DEFAULT_ON
     on_turn_on:
       then:
-        - globals.set: { id: instant_wake_enabled, value: 'true' }
-        - globals.set: { id: instant_wake_switched_by_auto, value: 'false' }
-        - lambda: |-
-            if (id(instant_wake_sw_widget) != nullptr) {
-              lv_obj_add_state(id(instant_wake_sw_widget), LV_STATE_CHECKED);
-            }
-        - script.execute: script_update_system_mode_label       
-    on_turn_off:
-      then:
-        - globals.set: { id: instant_wake_enabled, value: 'false' }
         - script.execute: script_delayed_sleep
         - lambda: |-
+            if (id(scheduled_deep_sleep_sw_widget) != nullptr) lv_obj_add_state(id(scheduled_deep_sleep_sw_widget), LV_STATE_DISABLED);
             if (id(instant_wake_sw_widget) != nullptr) {
+              lv_obj_add_state(id(instant_wake_sw_widget), LV_STATE_DISABLED);
+              lv_obj_add_state(id(instant_wake_sw_widget), LV_STATE_CHECKED);
+            }
+        - globals.set: { id: instant_wake_enabled, value: 'true' }
+        - globals.set: { id: instant_wake_switched_by_auto, value: 'false' }
+        - script.execute: script_update_system_mode_label       
+        - script.execute: script_switch_cooldown
+        - script.wait: script_switch_cooldown
+        - lambda: |-
+            if (id(scheduled_deep_sleep_sw_widget) != nullptr) lv_obj_clear_state(id(scheduled_deep_sleep_sw_widget), LV_STATE_DISABLED);
+            if (id(instant_wake_sw_widget) != nullptr) lv_obj_clear_state(id(instant_wake_sw_widget), LV_STATE_DISABLED);
+    on_turn_off:
+      then:
+        - script.execute: script_delayed_sleep
+        - lambda: |-
+            if (id(scheduled_deep_sleep_sw_widget) != nullptr) lv_obj_add_state(id(scheduled_deep_sleep_sw_widget), LV_STATE_DISABLED);
+            if (id(instant_wake_sw_widget) != nullptr) {
+              lv_obj_add_state(id(instant_wake_sw_widget), LV_STATE_DISABLED);
               lv_obj_clear_state(id(instant_wake_sw_widget), LV_STATE_CHECKED);
             }
+        - globals.set: { id: instant_wake_enabled, value: 'false' }
+        - if:
+            condition:
+              lambda: 'return id(is_quiet_hours);'
+            then:
+              - script.execute: script_delayed_sleep     
         - script.execute: script_update_system_mode_label
+        - script.execute: script_switch_cooldown
+        - script.wait: script_switch_cooldown
         - if:
             condition:
               lambda: 'return !id(scheduled_deep_sleep_enabled);'
             then:
               - switch.turn_on: scheduled_deep_sleep_switch
+        - lambda: |-
+            if (id(scheduled_deep_sleep_sw_widget) != nullptr) lv_obj_clear_state(id(scheduled_deep_sleep_sw_widget), LV_STATE_DISABLED);
+            if (id(instant_wake_sw_widget) != nullptr) lv_obj_clear_state(id(instant_wake_sw_widget), LV_STATE_DISABLED);
               
   - platform: template
     name: "${scheduled_deep_sleep_ha}"
@@ -1126,46 +1313,41 @@ switch:
     restore_mode: RESTORE_DEFAULT_OFF
     on_turn_on:
       then:
-        - globals.set: { id: scheduled_deep_sleep_enabled, value: 'true' }
+        - script.execute: script_delayed_sleep
         - lambda: |-
+            if (id(instant_wake_sw_widget) != nullptr) lv_obj_add_state(id(instant_wake_sw_widget), LV_STATE_DISABLED);
             if (id(scheduled_deep_sleep_sw_widget) != nullptr) {
+              lv_obj_add_state(id(scheduled_deep_sleep_sw_widget), LV_STATE_DISABLED);
               lv_obj_add_state(id(scheduled_deep_sleep_sw_widget), LV_STATE_CHECKED);
             }
-        - lambda: |-
-            #if CONFIG_IDF_TARGET_ESP32S3
-            auto time_now = id(sntp_time).now();
-            if (time_now.is_valid()) {
-                int h = time_now.hour;
-                int start_hour = atoi("${quiet_hours_start}");
-                int stop_hour = atoi("${quiet_hours_end}");
-                if (h >= start_hour || h < stop_hour) {
-                    id(is_quiet_hours) = true;
-                } else {
-                    id(is_quiet_hours) = false;
-                }
-            }
-            #endif   
-        - if:
-            condition:
-              lambda: |-
-                return id(is_quiet_hours) && id(instant_wake_enabled);
-            then:
-              - globals.set: { id: instant_wake_switched_by_auto, value: 'true' }
-              - switch.turn_off: instant_wake_switch
+        - globals.set: { id: scheduled_deep_sleep_enabled, value: 'true' } 
         - script.execute: script_update_system_mode_label
+        - script.execute: script_switch_cooldown
+        - script.wait: script_switch_cooldown
+        - lambda: |-
+            if (id(scheduled_deep_sleep_sw_widget) != nullptr) lv_obj_clear_state(id(scheduled_deep_sleep_sw_widget), LV_STATE_DISABLED);
+            if (id(instant_wake_sw_widget) != nullptr) lv_obj_clear_state(id(instant_wake_sw_widget), LV_STATE_DISABLED);
     on_turn_off:
       then:
-        - globals.set: { id: scheduled_deep_sleep_enabled, value: 'false' }
+        - script.execute: script_delayed_sleep
         - lambda: |-
+            if (id(instant_wake_sw_widget) != nullptr) lv_obj_add_state(id(instant_wake_sw_widget), LV_STATE_DISABLED);
             if (id(scheduled_deep_sleep_sw_widget) != nullptr) {
+              lv_obj_add_state(id(scheduled_deep_sleep_sw_widget), LV_STATE_DISABLED);
               lv_obj_clear_state(id(scheduled_deep_sleep_sw_widget), LV_STATE_CHECKED);
             }
+        - globals.set: { id: scheduled_deep_sleep_enabled, value: 'false' }
         - script.execute: script_update_system_mode_label
+        - script.execute: script_switch_cooldown
+        - script.wait: script_switch_cooldown
         - if:
             condition:
               lambda: 'return !id(instant_wake_enabled);'
             then:
               - switch.turn_on: instant_wake_switch
+        - lambda: |-
+            if (id(scheduled_deep_sleep_sw_widget) != nullptr) lv_obj_clear_state(id(scheduled_deep_sleep_sw_widget), LV_STATE_DISABLED);
+            if (id(instant_wake_sw_widget) != nullptr) lv_obj_clear_state(id(instant_wake_sw_widget), LV_STATE_DISABLED);
   
   - platform: homeassistant
     id: kids_room_socket_auto_turn_off
@@ -1217,7 +1399,7 @@ sensor:
   - platform: adc
     pin: 5
     id: battery_percentage
-    update_interval: 5s
+    update_interval: 30s
     attenuation: 12db
     accuracy_decimals: 3
     filters:
@@ -1240,15 +1422,16 @@ sensor:
     device_class: "battery"
     unit_of_measurement: "%"
     accuracy_decimals: 0
-    update_interval: 5s
+    update_interval: 30s
     lambda: |-
       float soc_val = id(battery_percentage).state;
       if (std::isnan(soc_val)) {
-          return {};
+          return id(saved_battery_soc);
       }
       int soc = (int)std::lround(soc_val);
       if (soc > 100) soc = 100;
       if (soc < 0) soc = 0;
+      id(saved_battery_soc) = soc;
       return soc;
     on_value:
       then:
@@ -2133,6 +2316,48 @@ binary_sensor:
             }
 
 text_sensor:
+  - platform: template
+    name: "${wakeup_ha}"
+    id: txt_wakeup
+    icon: mdi:clock-digital
+    lambda: |-
+      int total_minutes = id(dyn_deep_sleep_duration_min);
+      int hours = total_minutes / 60;
+      int minutes = total_minutes % 60;
+      char buf[64];
+      if (hours == 0) {
+          sprintf(buf, "%d ${minute}", minutes);
+      } else if (minutes == 0) {
+          sprintf(buf, "%d ${hour}", hours);
+      } else {
+          sprintf(buf, "%d ${hour} %d ${minute}", hours, minutes);
+      }
+      return std::string(buf);
+
+  - platform: template
+    name: "${quiet_hours_start_ha}"
+    id: txt_ha_quiet_hours_start
+    icon: mdi:clock-start
+    lambda: |-
+      int slot = id(dyn_quiet_hours_start_slot);
+      int hours = slot / 4;
+      int minutes = (slot % 4) * 15;
+      char buf[16];
+      sprintf(buf, "%02d:%02d", hours, minutes);
+      return std::string(buf);
+
+  - platform: template
+    name: "${quiet_hours_end_ha}"
+    id: txt_ha_quiet_hours_end
+    icon: mdi:clock-end
+    lambda: |-
+      int slot = id(dyn_quiet_hours_end_slot);
+      int hours = slot / 4;
+      int minutes = (slot % 4) * 15;
+      char buf[16];
+      sprintf(buf, "%02d:%02d", hours, minutes);
+      return std::string(buf);
+
   - platform: homeassistant
     id: camera_image_url
     entity_id: camera.biztonsagi_kamera_mainstream
@@ -4518,22 +4743,8 @@ lvgl:
               } else {
                 lv_obj_clear_state(id(instant_wake_sw_widget), LV_STATE_CHECKED);
               }
-          - lvgl.label.update:
-              id: lbl_system_mode_status
-              text: !lambda |-
-                bool wake = id(instant_wake_switch).state;
-                bool sleep = id(scheduled_deep_sleep_switch).state; 
-                if (wake && sleep) {
-                    return "${system_mode_on_on}";
-                }
-                if (wake && !sleep) {
-                    return "${system_mode_on_off}";
-                }
-                if (!wake && sleep) {
-                    return "${system_mode_off_on}";
-                }
-                return "";
-
+          - script.execute: script_update_system_mode_label
+      
       bg_color: color_pickled_bluewood
       widgets:
         - obj:
