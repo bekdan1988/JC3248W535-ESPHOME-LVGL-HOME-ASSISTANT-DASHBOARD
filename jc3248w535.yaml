@@ -105,8 +105,6 @@ substitutions:
   wakeup_ha: "Ébredés"                                                # EN: "Wakeup"
   quiet_hours_start_ha: "Csendes órák kezdete"                        # EN: "Quiet hours start"
   quiet_hours_end_ha: "Csendes órák vége"                             # EN: "Quiet hours end"
-  hour: "óra"                                                         # EN: "hour(s)
-  minute: "perc"                                                      # EN: "minutes(s)
   battery: "Akkumulátor"                                              # EN: "Battery"
   
     # MAIN MENU
@@ -238,6 +236,8 @@ substitutions:
   no_api_connection: "Nincs API kapcsolat!"                           # EN: "No API connection!"
   unknown: "Ismeretlen"                                               # EN: "Unknown"
   txt_off: "Ki"                                                       # EN: "Off"
+  hour: "óra"                                                         # EN: "hour(s)
+  minute: "perc"                                                      # EN: "minutes(s)
 
 # COLORS
 color:
@@ -561,11 +561,15 @@ script:
                   } else {
                       sprintf(duration_buf, "%d %s %d %s", hours, "${hour}", minutes, "${minute}");
                   }
+                  char start_time_buf[16];
+                  char end_time_buf[16];
+                  sprintf(start_time_buf, "%02d:%02d", id(dyn_quiet_start_hour), id(dyn_quiet_start_minute));
+                  sprintf(end_time_buf, "%02d:%02d", id(dyn_quiet_end_hour), id(dyn_quiet_end_minute));
                   char buf[256];
                   sprintf(buf, "%s%s-%s | %s%s | %s%s-%s", 
-                          "${hibernation}", id(txt_ha_quiet_hours_end).state.c_str(), id(txt_ha_quiet_hours_start).state.c_str(),
+                          "${hibernation}", end_time_buf, start_time_buf,
                           "${wakeup}", duration_buf, "${deep_sleep}",
-                          id(txt_ha_quiet_hours_start).state.c_str(), id(txt_ha_quiet_hours_end).state.c_str());
+                          start_time_buf, end_time_buf);
                   return std::string(buf);
       - if:
           condition:
@@ -908,12 +912,19 @@ time:
     on_time_sync:
       then:
         - lambda: |-
-            id(dyn_deep_sleep_duration_min) = (int)id(ha_deep_sleep_duration).state;
-            id(dyn_quiet_hours_start_slot) = (int)id(ha_quiet_hours_start_slot).state;
-            id(dyn_quiet_hours_end_slot) = (int)id(ha_quiet_hours_end_slot).state;
-        - component.update: txt_wakeup
-        - component.update: txt_ha_quiet_hours_start
-        - component.update: txt_ha_quiet_hours_end
+            id(dyn_sleep_duration_hour) = (int)id(ha_sleep_duration_hour).state;
+            id(dyn_sleep_duration_minute) = (int)id(ha_sleep_duration_minute).state;
+            id(dyn_quiet_start_hour) = (int)id(ha_quiet_start_hour).state;
+            id(dyn_quiet_start_minute) = (int)id(ha_quiet_start_minute).state;
+            id(dyn_quiet_end_hour) = (int)id(ha_quiet_end_hour).state;
+            id(dyn_quiet_end_minute) = (int)id(ha_quiet_end_minute).state;
+            int duration_min = (id(dyn_sleep_duration_hour) * 60) + id(dyn_sleep_duration_minute);
+            if (duration_min < 15) { duration_min = 15; }
+            id(ha_deep_sleep_duration).publish_state(duration_min);
+            int start_slot = (id(dyn_quiet_start_hour) * 4) + (id(dyn_quiet_start_minute) / 15);
+            id(ha_quiet_hours_start_slot).publish_state(start_slot);
+            int end_slot = (id(dyn_quiet_end_hour) * 4) + (id(dyn_quiet_end_minute) / 15);
+            id(ha_quiet_hours_end_slot).publish_state(end_slot);
         - script.execute: script_update_system_mode_label
         - lvgl.label.update:
             id: lbl_clock
@@ -1014,31 +1025,144 @@ time:
 
 number:
   - platform: template
-    name: "${wakeup_ha}"
+    name: "${wakeup_ha} - ${hour}"
+    id: ha_sleep_duration_hour
+    optimistic: true
+    restore_value: true
+    initial_value: 0
+    min_value: 0
+    max_value: 23
+    step: 1
+    icon: mdi:clock-outline
+    on_value:
+      then:
+        - lambda: |-
+            int current_hour = (int)x;
+            id(dyn_sleep_duration_hour) = current_hour;
+            if (current_hour == 0 && id(dyn_sleep_duration_minute) < 15) {
+                id(dyn_sleep_duration_minute) = 15;
+                auto *num_min = id(ha_sleep_duration_minute);
+                if (num_min != nullptr) num_min->publish_state(15);
+            }
+            int total_min = (id(dyn_sleep_duration_hour) * 60) + id(dyn_sleep_duration_minute);
+            if (total_min < 15) { total_min = 15; }
+            id(ha_deep_sleep_duration).publish_state(total_min);
+
+  - platform: template
+    name: "${wakeup_ha} - ${minute}"
+    id: ha_sleep_duration_minute
+    optimistic: true
+    restore_value: true
+    initial_value: 15
+    min_value: 0
+    max_value: 45
+    step: 15
+    icon: mdi:clock-outline
+    on_value:
+      then:
+        - lambda: |-
+            int current_minute = (int)x;
+            id(dyn_sleep_duration_minute) = current_minute;
+            if (id(dyn_sleep_duration_hour) == 0 && current_minute == 0) {
+                id(dyn_sleep_duration_hour) = 1;
+                auto *num_hour = id(ha_sleep_duration_hour);
+                if (num_hour != nullptr) num_hour->publish_state(1);
+            }
+            int total_min = (id(dyn_sleep_duration_hour) * 60) + id(dyn_sleep_duration_minute);
+            if (total_min < 15) { total_min = 15; }
+            id(ha_deep_sleep_duration).publish_state(total_min);
+
+  - platform: template
+    name: "${quiet_hours_start_ha} - ${hour}"
+    id: ha_quiet_start_hour
+    optimistic: true
+    restore_value: true
+    initial_value: 20
+    min_value: 0
+    max_value: 23
+    step: 1
+    icon: mdi:clock-start
+    on_value:
+      then:
+        - lambda: |-
+            id(dyn_quiet_start_hour) = (int)x;
+            int calculated_slot = (id(dyn_quiet_start_hour) * 4) + (id(dyn_quiet_start_minute) / 15);
+            id(ha_quiet_hours_start_slot).publish_state(calculated_slot);
+
+  - platform: template
+    name: "${quiet_hours_start_ha} - ${minute}"
+    id: ha_quiet_start_minute
+    optimistic: true
+    restore_value: true
+    initial_value: 0
+    min_value: 0
+    max_value: 45
+    step: 15
+    icon: mdi:clock-start
+    on_value:
+      then:
+        - lambda: |-
+            id(dyn_quiet_start_minute) = (int)x;
+            int calculated_slot = (id(dyn_quiet_start_hour) * 4) + (id(dyn_quiet_start_minute) / 15);
+            id(ha_quiet_hours_start_slot).publish_state(calculated_slot);
+
+  - platform: template
+    name: "${quiet_hours_end_ha} - ${hour}"
+    id: ha_quiet_end_hour
+    optimistic: true
+    restore_value: true
+    initial_value: 6
+    min_value: 0
+    max_value: 23
+    step: 1
+    icon: mdi:clock-end
+    on_value:
+      then:
+        - lambda: |-
+            id(dyn_quiet_end_hour) = (int)x;
+            int calculated_slot = (id(dyn_quiet_end_hour) * 4) + (id(dyn_quiet_end_minute) / 15);
+            id(ha_quiet_hours_end_slot).publish_state(calculated_slot);
+
+  - platform: template
+    name: "${quiet_hours_end_ha} - ${minute}"
+    id: ha_quiet_end_minute
+    optimistic: true
+    restore_value: true
+    initial_value: 0
+    min_value: 0
+    max_value: 45
+    step: 15
+    icon: mdi:clock-end
+    on_value:
+      then:
+        - lambda: |-
+            id(dyn_quiet_end_minute) = (int)x;
+            int calculated_slot = (id(dyn_quiet_end_hour) * 4) + (id(dyn_quiet_end_minute) / 15);
+            id(ha_quiet_hours_end_slot).publish_state(calculated_slot);
+
+  - platform: template
     id: ha_deep_sleep_duration
+    internal: true
     optimistic: true
     restore_value: true
     initial_value: 15
     min_value: 15
     max_value: 1425
     step: 15
-    icon: mdi:sleep
     on_value:
       then:
         - lambda: 'id(dyn_deep_sleep_duration_min) = (int)x;'
-        - component.update: txt_wakeup
         - script.execute: script_update_system_mode_label
 
   - platform: template
-    name: "${quiet_hours_start_ha}"
     id: ha_quiet_hours_start_slot
+    internal: true
     optimistic: true
     restore_value: true
     initial_value: 80
     min_value: 0
     max_value: 95
     step: 1
-    icon: mdi:clock-start
     on_value:
       then:
         - lambda: |-
@@ -1050,20 +1174,17 @@ number:
                 auto *num_end = id(ha_quiet_hours_end_slot);
                 if (num_end != nullptr) num_end->publish_state(new_end);
             }
-        - component.update: txt_ha_quiet_hours_start
-        - component.update: txt_ha_quiet_hours_end
         - script.execute: script_update_system_mode_label
 
   - platform: template
-    name: "${quiet_hours_end_ha}"
     id: ha_quiet_hours_end_slot
+    internal: true
     optimistic: true
     restore_value: true
     initial_value: 24
     min_value: 0
     max_value: 95
     step: 1
-    icon: mdi:clock-end
     on_value:
       then:
         - lambda: |-
@@ -1075,8 +1196,6 @@ number:
                 auto *num_end = id(ha_quiet_hours_end_slot);
                 if (num_end != nullptr) num_end->publish_state(forced_end);
             }
-        - component.update: txt_ha_quiet_hours_start
-        - component.update: txt_ha_quiet_hours_end
         - script.execute: script_update_system_mode_label
 
   - platform: template
@@ -1173,7 +1292,7 @@ globals:
 
   - id: dyn_deep_sleep_duration_min
     type: int
-    initial_value: '60'
+    initial_value: '15'
 
   - id: dyn_quiet_hours_start_slot
     type: int
@@ -1182,6 +1301,36 @@ globals:
   - id: dyn_quiet_hours_end_slot
     type: int
     initial_value: '24'
+
+  - id: dyn_sleep_duration_hour
+    type: int
+    restore_value: yes
+    initial_value: '0'
+
+  - id: dyn_sleep_duration_minute
+    type: int
+    restore_value: yes
+    initial_value: '15'
+
+  - id: dyn_quiet_start_hour
+    type: int
+    restore_value: yes
+    initial_value: '20'
+
+  - id: dyn_quiet_start_minute
+    type: int
+    restore_value: yes
+    initial_value: '0'
+
+  - id: dyn_quiet_end_hour
+    type: int
+    restore_value: yes
+    initial_value: '6'
+
+  - id: dyn_quiet_end_minute
+    type: int
+    restore_value: yes
+    initial_value: '0'
 
 interval:
   - interval: 60s
@@ -1199,7 +1348,7 @@ interval:
                   if (std::isnan(current_soc)) {
                       return id(color_whitesmoke);
                   }
-                  if (current_soc >= 100.0f) {
+                  if (current_soc >= 100.1f) {
                       return id(color_screamin_green);
                   }
                   if (current_soc <= 20.0f) {
@@ -1404,6 +1553,9 @@ sensor:
     accuracy_decimals: 3
     filters:
       - multiply: 1.72
+      - sliding_window_moving_average:
+          window_size: 15
+          send_every: 1
       - calibrate_linear:
           method: exact
           datapoints:
@@ -1411,10 +1563,8 @@ sensor:
             - 3.35 ->  12.0
             - 3.40 ->  20.0
             - 3.60 ->  60.0
-            - 4.00 ->  100.0       
-      - sliding_window_moving_average:
-          window_size: 15
-          send_every: 1
+            - 3.90 ->  100.0
+            - 4.10 ->  100.1
 
   - platform: template
     name: "${battery}"
@@ -2316,48 +2466,6 @@ binary_sensor:
             }
 
 text_sensor:
-  - platform: template
-    name: "${wakeup_ha}"
-    id: txt_wakeup
-    icon: mdi:clock-digital
-    lambda: |-
-      int total_minutes = id(dyn_deep_sleep_duration_min);
-      int hours = total_minutes / 60;
-      int minutes = total_minutes % 60;
-      char buf[64];
-      if (hours == 0) {
-          sprintf(buf, "%d ${minute}", minutes);
-      } else if (minutes == 0) {
-          sprintf(buf, "%d ${hour}", hours);
-      } else {
-          sprintf(buf, "%d ${hour} %d ${minute}", hours, minutes);
-      }
-      return std::string(buf);
-
-  - platform: template
-    name: "${quiet_hours_start_ha}"
-    id: txt_ha_quiet_hours_start
-    icon: mdi:clock-start
-    lambda: |-
-      int slot = id(dyn_quiet_hours_start_slot);
-      int hours = slot / 4;
-      int minutes = (slot % 4) * 15;
-      char buf[16];
-      sprintf(buf, "%02d:%02d", hours, minutes);
-      return std::string(buf);
-
-  - platform: template
-    name: "${quiet_hours_end_ha}"
-    id: txt_ha_quiet_hours_end
-    icon: mdi:clock-end
-    lambda: |-
-      int slot = id(dyn_quiet_hours_end_slot);
-      int hours = slot / 4;
-      int minutes = (slot % 4) * 15;
-      char buf[16];
-      sprintf(buf, "%02d:%02d", hours, minutes);
-      return std::string(buf);
-
   - platform: homeassistant
     id: camera_image_url
     entity_id: camera.biztonsagi_kamera_mainstream
