@@ -697,8 +697,6 @@ esphome:
       - script.execute: line_burn_in_protection
       - delay: 1s
       - script.execute: script_delayed_sleep
-      - delay: 5s
-      - component.update: battery_interval_trigger
 
 esp32: 
   board: esp32-s3-devkitc-1
@@ -808,6 +806,7 @@ touchscreen:
               - wifi.enable:
               - lvgl.resume:
               - light.turn_on: display_backlight
+              - component.update: battery_soc_sensor
               - delay: 200ms
               - if:
                   condition:
@@ -1285,11 +1284,6 @@ globals:
     restore_value: no
     initial_value: "false"
 
-  - id: saved_battery_soc
-    type: int
-    restore_value: yes
-    initial_value: "100"
-
   - id: dyn_deep_sleep_duration_min
     type: int
     initial_value: '15'
@@ -1333,55 +1327,6 @@ globals:
     initial_value: '0'
 
 interval:
-  - interval: 60s
-    id: battery_interval_trigger
-    then:
-      - if:
-          condition:
-            lambda: 'return id(display_backlight).remote_values.is_on();'
-          then:
-            - lvgl.label.update:
-                id: batt_label
-                text_font: f_tray_icons  
-                text_color: !lambda |-
-                  float current_soc = id(battery_percentage).state;
-                  if (std::isnan(current_soc)) {
-                      return id(color_whitesmoke);
-                  }
-                  if (current_soc >= 100.1f) {
-                      return id(color_screamin_green);
-                  }
-                  if (current_soc <= 20.0f) {
-                      return id(color_red);
-                  }
-                  return id(color_whitesmoke);
-                text: !lambda |-
-                  static char buf[16];             
-                  if (millis() < 6000) {
-                      snprintf(buf, sizeof(buf), "%s", "${icon_battery_unknown}");
-                      return buf;
-                  }            
-                  float soc_val = id(battery_percentage).state;
-                  if (std::isnan(soc_val)) {
-                      snprintf(buf, sizeof(buf), "%s", "${icon_battery_unknown}");
-                      return buf;
-                  }            
-                  int soc = (int)std::lround(soc_val);
-                  std::string icon;            
-                  if (soc >= 100)     icon = "${icon_battery_full}";
-                  else if (soc >= 90) icon = "${icon_battery_90}";
-                  else if (soc >= 80) icon = "${icon_battery_80}";
-                  else if (soc >= 70) icon = "${icon_battery_70}";
-                  else if (soc >= 60) icon = "${icon_battery_60}";
-                  else if (soc >= 50) icon = "${icon_battery_50}";
-                  else if (soc >= 40) icon = "${icon_battery_40}";
-                  else if (soc >= 30) icon = "${icon_battery_30}";
-                  else if (soc >= 20) icon = "${icon_battery_20}";
-                  else if (soc >= 10) icon = "${icon_battery_10}";
-                  else                icon = "${icon_battery_outline}";
-                  snprintf(buf, sizeof(buf), "%s", icon.c_str());
-                  return buf;
-
   - interval: "${camera_update_interval}"
     then:
       - if:
@@ -1547,10 +1492,15 @@ sensor:
 
   - platform: adc
     pin: 5
-    id: battery_percentage
-    update_interval: 30s
+    name: "${battery}"
+    id: battery_soc_sensor
+    unit_of_measurement: "%"
+    device_class: battery
+    state_class: measurement
     attenuation: 12db
-    accuracy_decimals: 3
+    accuracy_decimals: 0
+    samples: 16
+    update_interval: 60s
     filters:
       - multiply: 1.72
       - sliding_window_moving_average:
@@ -1563,29 +1513,59 @@ sensor:
             - 3.35 ->  12.0
             - 3.40 ->  20.0
             - 3.60 ->  60.0
-            - 3.90 ->  100.0
-            - 4.10 ->  100.1
-
-  - platform: template
-    name: "${battery}"
-    id: battery_soc_sensor
-    device_class: "battery"
-    unit_of_measurement: "%"
-    accuracy_decimals: 0
-    update_interval: 30s
-    lambda: |-
-      float soc_val = id(battery_percentage).state;
-      if (std::isnan(soc_val)) {
-          return id(saved_battery_soc);
-      }
-      int soc = (int)std::lround(soc_val);
-      if (soc > 100) soc = 100;
-      if (soc < 0) soc = 0;
-      id(saved_battery_soc) = soc;
-      return soc;
+            - 4.10 ->  100.0
+            - 4.20 ->  100.01
+      - clamp: 
+          min_value: 0.0
+          max_value: 100.01
+      - lambda: |-
+          if (millis() < 5000) {
+              return {};
+          }
+          return x;   
     on_value:
       then:
-        - component.update: battery_interval_trigger
+        - if:
+            condition:
+              lambda: 'return id(display_backlight).remote_values.is_on();'
+            then:
+              - lvgl.label.update:
+                  id: batt_label
+                  text_font: f_tray_icons  
+                  text_color: !lambda |-
+                    float current_soc = id(battery_soc_sensor).state;
+                    if (std::isnan(current_soc)) {
+                        return id(color_whitesmoke);
+                    }
+                    if (current_soc >= 100.01f) {
+                        return id(color_screamin_green);
+                    }
+                    if (current_soc <= 20.0f) {
+                        return id(color_red);
+                    }
+                    return id(color_whitesmoke);
+                  text: !lambda |-
+                    static char buf[16];        
+                    float soc_val = id(battery_soc_sensor).state;
+                    if (std::isnan(soc_val)) {
+                        snprintf(buf, sizeof(buf), "%s", "${icon_battery_unknown}");
+                        return buf;
+                    }            
+                    int soc = (int)std::lround(soc_val);
+                    std::string icon;            
+                    if (soc >= 100)     icon = "${icon_battery_full}";
+                    else if (soc >= 90) icon = "${icon_battery_90}";
+                    else if (soc >= 80) icon = "${icon_battery_80}";
+                    else if (soc >= 70) icon = "${icon_battery_70}";
+                    else if (soc >= 60) icon = "${icon_battery_60}";
+                    else if (soc >= 50) icon = "${icon_battery_50}";
+                    else if (soc >= 40) icon = "${icon_battery_40}";
+                    else if (soc >= 30) icon = "${icon_battery_30}";
+                    else if (soc >= 20) icon = "${icon_battery_20}";
+                    else if (soc >= 10) icon = "${icon_battery_10}";
+                    else                icon = "${icon_battery_outline}";
+                    snprintf(buf, sizeof(buf), "%s", icon.c_str());
+                    return buf;
 
   - platform: homeassistant
     id: thermostat_current_temp
