@@ -1509,10 +1509,10 @@ sensor:
       - calibrate_linear:
           method: exact
           datapoints:
-            - 3.00 ->   0.0
-            - 3.35 ->  12.0
-            - 3.40 ->  20.0
-            - 3.60 ->  60.0
+            - 3.40 ->   0.0
+            - 3.65 ->  20.0
+            - 3.73 ->  40.0
+            - 3.85 ->  70.0
             - 4.10 ->  100.0
             - 4.20 ->  100.01
       - clamp: 
@@ -1525,6 +1525,14 @@ sensor:
           return x;   
     on_value:
       then:
+        - if:
+            condition:
+              lambda: |-
+                float current_soc = id(battery_soc_sensor).state;
+                if (std::isnan(current_soc)) return false;
+                return current_soc <= 0.0f;
+            then:
+              - script.execute: script_shutdown
         - if:
             condition:
               lambda: 'return id(display_backlight).remote_values.is_on();'
