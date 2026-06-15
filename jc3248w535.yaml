@@ -416,6 +416,13 @@ font:
     glyphs: '0123456789.°CF+- \n'
     
 script:
+  - id: script_switch_cooldown
+    mode: restart
+    then:
+      - globals.set: { id: is_switch_cooldown_active, value: 'true' }
+      - delay: 1s
+      - globals.set: { id: is_switch_cooldown_active, value: 'false' }
+      
   - id: script_restart
     then:
       - lvgl.page.show: page_restart_screen
@@ -443,11 +450,6 @@ script:
           rtc_cpu_freq_config_t cfg;
           rtc_clk_cpu_freq_mhz_to_config(240, &cfg);
           rtc_clk_cpu_freq_set_config(&cfg);
-  
-  - id: script_switch_cooldown
-    mode: restart
-    then:
-      - delay: 1s
   
   - id: script_delayed_sleep
     mode: restart
@@ -1250,6 +1252,10 @@ online_image:
           src: online_image_camera
 
 globals:
+  - id: is_switch_cooldown_active
+    type: bool
+    initial_value: 'false'
+
   - id: timeout_value
     type: int
     restore_value: yes
@@ -1357,48 +1363,60 @@ switch:
     restore_mode: RESTORE_DEFAULT_ON
     on_turn_on:
       then:
-        - script.execute: script_delayed_sleep
-        - lambda: |-
-            if (id(scheduled_deep_sleep_sw_widget) != nullptr) lv_obj_add_state(id(scheduled_deep_sleep_sw_widget), LV_STATE_DISABLED);
-            if (id(instant_wake_sw_widget) != nullptr) {
-              lv_obj_add_state(id(instant_wake_sw_widget), LV_STATE_DISABLED);
-              lv_obj_add_state(id(instant_wake_sw_widget), LV_STATE_CHECKED);
-            }
-        - globals.set: { id: instant_wake_enabled, value: 'true' }
-        - globals.set: { id: instant_wake_switched_by_auto, value: 'false' }
-        - script.execute: script_update_system_mode_label       
-        - script.execute: script_switch_cooldown
-        - script.wait: script_switch_cooldown
-        - lambda: |-
-            if (id(scheduled_deep_sleep_sw_widget) != nullptr) lv_obj_clear_state(id(scheduled_deep_sleep_sw_widget), LV_STATE_DISABLED);
-            if (id(instant_wake_sw_widget) != nullptr) lv_obj_clear_state(id(instant_wake_sw_widget), LV_STATE_DISABLED);
+        - if:
+            condition:
+              lambda: 'return id(is_switch_cooldown_active);'
+            then:
+              - switch.turn_off: instant_wake_switch
+            else:
+              - script.execute: script_delayed_sleep
+              - lambda: |-
+                  if (id(scheduled_deep_sleep_sw_widget) != nullptr) lv_obj_add_state(id(scheduled_deep_sleep_sw_widget), LV_STATE_DISABLED);
+                  if (id(instant_wake_sw_widget) != nullptr) {
+                    lv_obj_add_state(id(instant_wake_sw_widget), LV_STATE_DISABLED);
+                    lv_obj_add_state(id(instant_wake_sw_widget), LV_STATE_CHECKED);
+                  }
+              - globals.set: { id: instant_wake_enabled, value: 'true' }
+              - globals.set: { id: instant_wake_switched_by_auto, value: 'false' }
+              - script.execute: script_update_system_mode_label       
+              - script.execute: script_switch_cooldown
+              - script.wait: script_switch_cooldown
+              - lambda: |-
+                  if (id(scheduled_deep_sleep_sw_widget) != nullptr) lv_obj_clear_state(id(scheduled_deep_sleep_sw_widget), LV_STATE_DISABLED);
+                  if (id(instant_wake_sw_widget) != nullptr) lv_obj_clear_state(id(instant_wake_sw_widget), LV_STATE_DISABLED);
     on_turn_off:
       then:
-        - script.execute: script_delayed_sleep
-        - lambda: |-
-            if (id(scheduled_deep_sleep_sw_widget) != nullptr) lv_obj_add_state(id(scheduled_deep_sleep_sw_widget), LV_STATE_DISABLED);
-            if (id(instant_wake_sw_widget) != nullptr) {
-              lv_obj_add_state(id(instant_wake_sw_widget), LV_STATE_DISABLED);
-              lv_obj_clear_state(id(instant_wake_sw_widget), LV_STATE_CHECKED);
-            }
-        - globals.set: { id: instant_wake_enabled, value: 'false' }
         - if:
             condition:
-              lambda: 'return id(is_quiet_hours);'
+              lambda: 'return id(is_switch_cooldown_active);'
             then:
-              - script.execute: script_delayed_sleep     
-        - script.execute: script_update_system_mode_label
-        - script.execute: script_switch_cooldown
-        - script.wait: script_switch_cooldown
-        - if:
-            condition:
-              lambda: 'return !id(scheduled_deep_sleep_enabled);'
-            then:
-              - switch.turn_on: scheduled_deep_sleep_switch
-        - lambda: |-
-            if (id(scheduled_deep_sleep_sw_widget) != nullptr) lv_obj_clear_state(id(scheduled_deep_sleep_sw_widget), LV_STATE_DISABLED);
-            if (id(instant_wake_sw_widget) != nullptr) lv_obj_clear_state(id(instant_wake_sw_widget), LV_STATE_DISABLED);
-              
+              - switch.turn_on: instant_wake_switch
+            else:
+              - script.execute: script_delayed_sleep
+              - lambda: |-
+                  if (id(scheduled_deep_sleep_sw_widget) != nullptr) lv_obj_add_state(id(scheduled_deep_sleep_sw_widget), LV_STATE_DISABLED);
+                  if (id(instant_wake_sw_widget) != nullptr) {
+                    lv_obj_add_state(id(instant_wake_sw_widget), LV_STATE_DISABLED);
+                    lv_obj_clear_state(id(instant_wake_sw_widget), LV_STATE_CHECKED);
+                  }
+              - globals.set: { id: instant_wake_enabled, value: 'false' }
+              - if:
+                  condition:
+                    lambda: 'return id(is_quiet_hours);'
+                  then:
+                    - script.execute: script_delayed_sleep     
+              - script.execute: script_update_system_mode_label
+              - script.execute: script_switch_cooldown
+              - script.wait: script_switch_cooldown
+              - if:
+                  condition:
+                    lambda: 'return !id(scheduled_deep_sleep_enabled);'
+                  then:
+                    - switch.turn_on: scheduled_deep_sleep_switch
+              - lambda: |-
+                  if (id(scheduled_deep_sleep_sw_widget) != nullptr) lv_obj_clear_state(id(scheduled_deep_sleep_sw_widget), LV_STATE_DISABLED);
+                  if (id(instant_wake_sw_widget) != nullptr) lv_obj_clear_state(id(instant_wake_sw_widget), LV_STATE_DISABLED);            
+  
   - platform: template
     name: "${scheduled_deep_sleep_ha}"
     id: scheduled_deep_sleep_switch
@@ -1407,41 +1425,53 @@ switch:
     restore_mode: RESTORE_DEFAULT_OFF
     on_turn_on:
       then:
-        - script.execute: script_delayed_sleep
-        - lambda: |-
-            if (id(instant_wake_sw_widget) != nullptr) lv_obj_add_state(id(instant_wake_sw_widget), LV_STATE_DISABLED);
-            if (id(scheduled_deep_sleep_sw_widget) != nullptr) {
-              lv_obj_add_state(id(scheduled_deep_sleep_sw_widget), LV_STATE_DISABLED);
-              lv_obj_add_state(id(scheduled_deep_sleep_sw_widget), LV_STATE_CHECKED);
-            }
-        - globals.set: { id: scheduled_deep_sleep_enabled, value: 'true' } 
-        - script.execute: script_update_system_mode_label
-        - script.execute: script_switch_cooldown
-        - script.wait: script_switch_cooldown
-        - lambda: |-
-            if (id(scheduled_deep_sleep_sw_widget) != nullptr) lv_obj_clear_state(id(scheduled_deep_sleep_sw_widget), LV_STATE_DISABLED);
-            if (id(instant_wake_sw_widget) != nullptr) lv_obj_clear_state(id(instant_wake_sw_widget), LV_STATE_DISABLED);
-    on_turn_off:
-      then:
-        - script.execute: script_delayed_sleep
-        - lambda: |-
-            if (id(instant_wake_sw_widget) != nullptr) lv_obj_add_state(id(instant_wake_sw_widget), LV_STATE_DISABLED);
-            if (id(scheduled_deep_sleep_sw_widget) != nullptr) {
-              lv_obj_add_state(id(scheduled_deep_sleep_sw_widget), LV_STATE_DISABLED);
-              lv_obj_clear_state(id(scheduled_deep_sleep_sw_widget), LV_STATE_CHECKED);
-            }
-        - globals.set: { id: scheduled_deep_sleep_enabled, value: 'false' }
-        - script.execute: script_update_system_mode_label
-        - script.execute: script_switch_cooldown
-        - script.wait: script_switch_cooldown
         - if:
             condition:
-              lambda: 'return !id(instant_wake_enabled);'
+              lambda: 'return id(is_switch_cooldown_active);'
             then:
-              - switch.turn_on: instant_wake_switch
-        - lambda: |-
-            if (id(scheduled_deep_sleep_sw_widget) != nullptr) lv_obj_clear_state(id(scheduled_deep_sleep_sw_widget), LV_STATE_DISABLED);
-            if (id(instant_wake_sw_widget) != nullptr) lv_obj_clear_state(id(instant_wake_sw_widget), LV_STATE_DISABLED);
+              - switch.turn_off: scheduled_deep_sleep_switch
+            else:
+              - script.execute: script_delayed_sleep
+              - lambda: |-
+                  if (id(instant_wake_sw_widget) != nullptr) lv_obj_add_state(id(instant_wake_sw_widget), LV_STATE_DISABLED);
+                  if (id(scheduled_deep_sleep_sw_widget) != nullptr) {
+                    lv_obj_add_state(id(scheduled_deep_sleep_sw_widget), LV_STATE_DISABLED);
+                    lv_obj_add_state(id(scheduled_deep_sleep_sw_widget), LV_STATE_CHECKED);
+                  }
+              - globals.set: { id: scheduled_deep_sleep_enabled, value: 'true' } 
+              - script.execute: script_update_system_mode_label
+              - script.execute: script_switch_cooldown
+              - script.wait: script_switch_cooldown
+              - lambda: |-
+                  if (id(scheduled_deep_sleep_sw_widget) != nullptr) lv_obj_clear_state(id(scheduled_deep_sleep_sw_widget), LV_STATE_DISABLED);
+                  if (id(instant_wake_sw_widget) != nullptr) lv_obj_clear_state(id(instant_wake_sw_widget), LV_STATE_DISABLED);
+    on_turn_off:
+      then:
+        - if:
+            condition:
+              lambda: 'return id(is_switch_cooldown_active);'
+            then:
+              - switch.turn_on: scheduled_deep_sleep_switch
+            else:
+              - script.execute: script_delayed_sleep
+              - lambda: |-
+                  if (id(instant_wake_sw_widget) != nullptr) lv_obj_add_state(id(instant_wake_sw_widget), LV_STATE_DISABLED);
+                  if (id(scheduled_deep_sleep_sw_widget) != nullptr) {
+                    lv_obj_add_state(id(scheduled_deep_sleep_sw_widget), LV_STATE_DISABLED);
+                    lv_obj_clear_state(id(scheduled_deep_sleep_sw_widget), LV_STATE_CHECKED);
+                  }
+              - globals.set: { id: scheduled_deep_sleep_enabled, value: 'false' }
+              - script.execute: script_update_system_mode_label
+              - script.execute: script_switch_cooldown
+              - script.wait: script_switch_cooldown
+              - if:
+                  condition:
+                    lambda: 'return !id(instant_wake_enabled);'
+                  then:
+                    - switch.turn_on: instant_wake_switch
+              - lambda: |-
+                  if (id(scheduled_deep_sleep_sw_widget) != nullptr) lv_obj_clear_state(id(scheduled_deep_sleep_sw_widget), LV_STATE_DISABLED);
+                  if (id(instant_wake_sw_widget) != nullptr) lv_obj_clear_state(id(instant_wake_sw_widget), LV_STATE_DISABLED);
   
   - platform: homeassistant
     id: kids_room_socket_auto_turn_off
